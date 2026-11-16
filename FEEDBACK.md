@@ -46,7 +46,7 @@ Usage rows print with a `usage` line. `--no-sync` is read-only. By default, a re
 To read without the repo:
 
 ```bash
-curl -s "https://textdb.dev/api/data/cosmic-odyssey-feedback-7c2a91e4b8d0461f-$(date -u +%F)"
+curl -s https://textdb.dev/api/data/cosmic-odyssey-feedback-7c2a91e4b8d0461f-YYYY-MM-DD
 ```
 
 There is no daily job and no automation that adds games or content.

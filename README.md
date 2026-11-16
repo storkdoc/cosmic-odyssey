@@ -4,13 +4,15 @@ by Steve Behram
 
 A cinematic, science-based voyage in the browser. You leave Infinity Command, fly with Newtonian gravity, walk worlds, and design universes other people can visit.
 
-In 2017 a campaign called itself a space game and raised $357,866 from 7,207 backers. It went quiet in 2020 and never shipped. This is Steve’s gift to the people who were let down: **let’s build a universe together.**
+In 2017 a campaign promised a space game, took support from 7,207 people, went quiet in 2020, and never shipped. This is Steve’s gift to the people who were let down: **let’s build a universe together.**
+
+Free forever. No purchases, no ads. Presented with [Savage Planets](https://savageplanets.com). [Read the free Savage Planets comic](https://savageplanets.com).
 
 The guide is LYRA, an original hologram science guide of the Galactic Coalition. Play it at [https://storkdoc.github.io/cosmic-odyssey/](https://storkdoc.github.io/cosmic-odyssey/).
 
 ## The voyage
 
-You start docked at **Infinity Command**, in orbit of Proxima b. The opening is a letterboxed fly-in past the station to the planet’s limb. Skip it with a tap or a key after you begin (the first tap also starts the music).
+You begin in flight near Proxima b, with one prompt at a time. Assist is on: hold W toward the marker, then press L and the ship flies the entry corridor. A tap or a key skips the Savage Planets card and the title. The first tap also starts the music. N turns assist off if you want the burns yourself.
 
 From the station:
 
@@ -37,20 +39,19 @@ Progress is saved in this browser (`localStorage` key `cosmic-odyssey.save`).
 
 | Key | Action |
 |---|---|
-| A D or drag | Turn |
-| W / S | Thrust / brake |
-| X / C | Point retrograde / prograde |
-| M | Hold a matching burn onto a circular path |
-| G | Scan the targeted world |
-| L | Atmospheric entry, when you are slow and low |
-| F | Dock at Infinity Command |
-| Tab | Next world |
-| V | Cycle warp |
-| Space | Toggle the miner on a surface |
-| Shift | Jet-pack thrust on a surface, with the holographic helmet |
+| W | Thrust toward the marker. Assist points the nose |
+| L | Land. The assist flies the entry corridor |
+| Space | Mine, while you hold it |
+| B | Fit the solar sail, once the ore is aboard |
+| T | Cross to TRAPPIST-1 |
+| R | Bring the pilot aboard, beside the wreck |
+| F | Open the Behram Universe Forge |
+| N | Assist on or off. Off is Newtonian |
+| I | Infinity Command, the station buttons |
+| Shift | Jet pack on a surface, with the helmet |
 | ` | The feedback sticker |
 
-On a phone, the stick steers and the buttons thrust, point retrograde, act, and hold the rescue. A **Quality** control drops bloom, god rays, and film grain so a small screen stays smooth.
+On a phone the same actions are buttons. Quality drops bloom, god rays, and shadows so a phone can hold a smooth frame.
 
 LAND READY means the relative speed is low enough for the heat shield. Entry plays the plasma pass. A slingshot that leaves you faster than you arrived gets its own camera move.
 

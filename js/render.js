@@ -32,6 +32,8 @@ const PLANET_FRAG = `
   uniform float uLava;
   uniform float uCities;
   uniform float uSeed;
+  uniform float uLocked;
+  uniform float uFlux;
   float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
   float noise(vec3 p) {
     vec3 i = floor(p);
@@ -53,15 +55,27 @@ const PLANET_FRAG = `
     vec3 green = vec3(0.16, 0.32, 0.14);
     rock = mix(rock, green, uVeg * smoothstep(0.35, 0.7, nse));
     float shore = smoothstep(0.12, 0.5, uWater) * (1.0 - uIce * 0.85);
-    vec3 ocean = vec3(0.015, 0.06, 0.1);
+    vec3 ocean = vec3(0.02, 0.07, 0.11);
     vec3 base = mix(rock, ocean, shore);
-    float lat = abs(n.y);
-    base = mix(base, vec3(0.86, 0.9, 0.95), uIce * smoothstep(0.35, 0.85, lat + nse * 0.2));
+    float face = dot(n, sunDir);
+    if (uLocked > 0.5) {
+      float hot = smoothstep(0.05, 0.8, face);
+      float cold = smoothstep(0.05, -0.72, face);
+      float band = smoothstep(-0.05, 0.28, face) * smoothstep(0.72, 0.18, face);
+      base = mix(base, vec3(0.42, 0.16, 0.07), hot * 0.8);
+      base = mix(base, vec3(0.78, 0.84, 0.9), cold);
+      shore *= band;
+      base = mix(base, ocean, shore * 0.85);
+    } else {
+      float lat = abs(n.y);
+      base = mix(base, vec3(0.86, 0.9, 0.95), uIce * smoothstep(0.35, 0.85, lat + nse * 0.2));
+    }
     if (uLava > 0.02) base = mix(base, vec3(0.45, 0.08, 0.02), uLava);
     vec3 V = normalize(uCam - vW);
     vec3 H = normalize(sunDir + V);
     float spec = pow(max(dot(n, H), 0.0), 90.0) * shore * day;
-    vec3 lit = base * (0.045 + 0.96 * day) * uSunColor + spec * uSunColor * 1.4;
+    float fall = clamp(uFlux, 0.18, 2.4);
+    vec3 lit = base * (0.035 + 0.96 * day) * uSunColor * fall + spec * uSunColor * fall;
     float cities = uCities * (1.0 - day) * smoothstep(0.55, 0.85, hash(vec3(floor(n.x * 28.0), floor(n.y * 28.0), floor(n.z * 28.0))));
     lit += vec3(1.0, 0.78, 0.45) * cities;
     lit += vec3(1.0, 0.28, 0.05) * uLava * (0.35 + 0.65 * day);
@@ -166,7 +180,9 @@ function makePlanetMaterial(seed) {
       uVeg: { value: 0 },
       uLava: { value: 0 },
       uCities: { value: 0 },
-      uSeed: { value: seed || 0 }
+      uSeed: { value: seed || 0 },
+      uLocked: { value: 0 },
+      uFlux: { value: 1 }
     },
     vertexShader: PLANET_VERT,
     fragmentShader: PLANET_FRAG
@@ -241,6 +257,18 @@ function buildStation() {
   const accent = new THREE.Mesh(new THREE.TorusGeometry(2.15, 0.008, 6, 80), hot);
   accent.rotation.x = Math.PI / 2.4;
   g.add(accent);
+  const gate = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.03, 12, 48), new THREE.MeshBasicMaterial({ color: 0xE03A3A }));
+  gate.position.set(-1.35, 0.15, 1.15);
+  const gateInner = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.012, 8, 40), new THREE.MeshBasicMaterial({ color: 0xEEEDE7 }));
+  gateInner.position.copy(gate.position);
+  g.add(gate, gateInner);
+  const markTex = new THREE.TextureLoader().load('assets/brand/savageplanets-mark.png');
+  markTex.colorSpace = THREE.SRGBColorSpace;
+  const billboard = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), new THREE.MeshBasicMaterial({
+    map: markTex, transparent: true, depthWrite: false
+  }));
+  billboard.position.set(-1.35, 0.85, 1.15);
+  g.add(billboard);
   return g;
 }
 
@@ -265,41 +293,122 @@ function buildLyra() {
   return g;
 }
 
-function buildShip(design) {
+function buildShip(design, sailOn) {
   const g = new THREE.Group();
-  const primary = new THREE.Color(design.primary || '#c5d0d8');
-  const accent = new THREE.Color(design.accent || '#e25b1a');
-  const hull = new THREE.MeshStandardMaterial({ color: primary, metalness: 0.65, roughness: 0.28 });
-  const glow = new THREE.MeshBasicMaterial({ color: accent.clone().multiplyScalar(2.2) });
-  const kind = design.hull || 'dart';
-  if (kind === 'ring') {
-    const spine = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.09, 3, 6), hull);
-    spine.rotation.z = Math.PI / 2;
-    g.add(spine);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.006, 8, 20), hull);
-    ring.rotation.y = Math.PI / 2;
-    g.add(ring);
-  } else if (kind === 'hauler') {
-    for (let i = 0; i < 3; i++) {
-      const tank = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.04, 3, 6), hull);
-      tank.rotation.z = Math.PI / 2;
-      tank.position.set(-0.01 + i * 0.028, 0, 0);
-      g.add(tank);
-    }
-  } else {
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.07, 8), hull);
-    nose.rotation.z = -Math.PI / 2;
-    nose.position.x = 0.03;
-    g.add(nose);
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.004, 0.04), hull);
-    fin.position.set(-0.02, 0, 0);
-    g.add(fin);
+  const foil = new THREE.MeshStandardMaterial({
+    color: 0xd7b56a, metalness: 0.72, roughness: 0.38, envMapIntensity: 1
+  });
+  const white = new THREE.MeshStandardMaterial({
+    color: 0xe7e4dc, metalness: 0.55, roughness: 0.38, envMapIntensity: 0.8
+  });
+  const truss = new THREE.MeshStandardMaterial({
+    color: 0x9aa3a8, metalness: 0.8, roughness: 0.42
+  });
+  const solar = new THREE.MeshStandardMaterial({
+    color: 0x1c3f86, metalness: 0.35, roughness: 0.22, emissive: 0x061226, emissiveIntensity: 0.4
+  });
+  const bus = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.028, 0.032), foil);
+  bus.castShadow = true;
+  g.add(bus);
+  const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.03, 8), white);
+  nose.rotation.z = Math.PI / 2;
+  nose.position.x = 0.04;
+  g.add(nose);
+  for (let i = -1; i <= 1; i += 2) {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.003, 0.003), truss);
+    beam.position.set(-0.01, i * 0.012, 0);
+    g.add(beam);
   }
-  const engine = new THREE.Mesh(new THREE.SphereGeometry(0.01, 8, 8), glow);
-  engine.position.x = -0.05;
-  g.add(engine);
-  g.userData.engine = engine;
+  const rad = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.002, 0.05), white);
+  rad.position.set(-0.01, 0.02, 0);
+  g.add(rad);
+  const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.0012, 0.07), solar);
+  wingL.position.set(0.005, 0, 0.055);
+  const wingR = wingL.clone();
+  wingR.position.z = -0.055;
+  g.add(wingL, wingR);
+  const sail = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.16), new THREE.MeshStandardMaterial({
+    color: 0xf4f0e4, metalness: 0.15, roughness: 0.08, transparent: true, opacity: 0.55, side: THREE.DoubleSide
+  }));
+  sail.position.set(0.02, 0, 0);
+  sail.visible = !!sailOn;
+  g.add(sail);
+  g.userData.sail = sail;
+  const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.016, 0.02, 10), truss);
+  bell.rotation.z = Math.PI / 2;
+  bell.position.x = -0.04;
+  g.add(bell);
+  const plumeMat = new THREE.MeshBasicMaterial({
+    color: 0xffb15a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const plume = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.07, 10), plumeMat);
+  plume.rotation.z = Math.PI / 2;
+  plume.position.x = -0.08;
+  g.add(plume);
+  g.userData.plume = plume;
+  g.userData.rcs = [];
+  [[0.02, 0.016, 0.016], [0.02, -0.016, -0.016], [-0.02, 0.016, -0.016], [-0.02, -0.016, 0.016]].forEach((p) => {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.004, 6, 6), new THREE.MeshBasicMaterial({
+      color: 0xd5e6ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    puff.position.set(p[0], p[1], p[2]);
+    g.add(puff);
+    g.userData.rcs.push(puff);
+  });
+  g.scale.setScalar(design && design.hull === 'hauler' ? 2.1 : 1.7);
   return g;
+}
+
+function makeTextSprite(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(canvas), transparent: true, depthWrite: false
+  }));
+  spr.userData.canvas = canvas;
+  spr.userData.last = '';
+  setTextSprite(spr, text);
+  return spr;
+}
+
+function setTextSprite(spr, text) {
+  if (!spr || spr.userData.last === text) return;
+  spr.userData.last = text;
+  const canvas = spr.userData.canvas;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(24, 48, 464, 150);
+  ctx.fillStyle = '#f3f0e8';
+  ctx.textAlign = 'center';
+  ctx.font = '44px sans-serif';
+  String(text).split('\n').forEach((line, i) => ctx.fillText(line, 256, 110 + i * 52));
+  spr.material.map.needsUpdate = true;
+}
+
+function buildStarfield(count) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const z = Math.random() * 2 - 1;
+    const t = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.max(0, 1 - z * z)) * 260;
+    pos[i * 3] = Math.cos(t) * r;
+    pos[i * 3 + 1] = z * 260;
+    pos[i * 3 + 2] = Math.sin(t) * r;
+    const m = 0.55 + Math.random() * 0.45;
+    col[i * 3] = m;
+    col[i * 3 + 1] = m * (0.9 + Math.random() * 0.1);
+    col[i * 3 + 2] = m;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return new THREE.Points(geo, new THREE.PointsMaterial({
+    size: 1.15, sizeAttenuation: true, map: flareTexture(), transparent: true,
+    depthWrite: false, vertexColors: true, opacity: 0.95
+  }));
 }
 
 function buildLander() {
@@ -326,7 +435,8 @@ export function createView(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
+  renderer.toneMappingExposure = 1.02;
+  renderer.shadowMap.enabled = false;
   renderer.setClearColor(0x000000, 1);
 
   const scene = new THREE.Scene();
@@ -341,9 +451,37 @@ export function createView(canvas) {
     fragmentShader: SKY_FRAG
   }));
   scene.add(sky);
+  const stars = buildStarfield(1600);
+  scene.add(stars);
+  const nebula = new THREE.Group();
+  const blob = flareTexture();
+  [[40, 8, -30, 0x553322, 18], [-24, -6, 36, 0x223355, 22], [10, 14, 48, 0x6a2030, 16]].forEach((n) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: blob, color: n[3], transparent: true, opacity: 0.22,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    s.position.set(n[0], n[1], n[2]);
+    s.scale.set(n[4], n[4], 1);
+    nebula.add(s);
+  });
+  scene.add(nebula);
+  const skyLoader = new THREE.TextureLoader();
+  skyLoader.load('assets/sky/milkyway.jpg', (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    tex.anisotropy = 8;
+    if (sky.material && sky.material.dispose) sky.material.dispose();
+    sky.material = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false });
+    try {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromEquirectangular(tex).texture;
+      pmrem.dispose();
+    } catch (err) { /* the photograph still fills the sky */ }
+  });
 
-  scene.add(new THREE.AmbientLight(0x6e7c90, 0.55));
-  const key = new THREE.DirectionalLight(0xfff0dd, 2.4);
+  scene.add(new THREE.AmbientLight(0xc5ced6, 0.55));
+  const key = new THREE.DirectionalLight(0xfff4e8, 3.2);
+  scene.add(key.target);
   key.position.set(12, 18, 8);
   scene.add(key);
   scene.add(new THREE.HemisphereLight(0x9eb4d0, 0x1a100c, 0.45));
@@ -424,6 +562,13 @@ export function createView(canvas) {
   const stationMarker = buildStation();
   stationMarker.scale.setScalar(0.05);
   flight.add(stationMarker);
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: flareTexture(), color: 0xffc14a, blending: THREE.AdditiveBlending,
+    transparent: true, depthWrite: false, opacity: 0.95
+  }));
+  flight.add(marker);
+  const label = makeTextSprite(' ');
+  flight.add(label);
 
   const surface = new THREE.Group();
   scene.add(surface);
@@ -508,11 +653,12 @@ export function createView(canvas) {
   const planetPool = new Map();
   const clock = { t: 0 };
   let failed = false;
+  let apiRef = null;
 
   function buildComposer() {
     composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    bloom = new UnrealBloomPass(new THREE.Vector2(canvas.width, canvas.height), 0.42, 0.4, 0.78);
+    bloom = new UnrealBloomPass(new THREE.Vector2(canvas.width, canvas.height), 0.2, 0.32, 0.94);
     composer.addPass(bloom);
     god = new ShaderPass({
       uniforms: {
@@ -579,7 +725,9 @@ export function createView(canvas) {
   }
 
   function sunColorOf(star) {
-    const rgb = starRGB(star.teff || 5600);
+    const teff = star.teff || 5600;
+    if (teff < 3700) return new THREE.Color(1.0, 0.3, 0.07);
+    const rgb = starRGB(teff);
     return new THREE.Color(rgb[0], rgb[1], rgb[2]);
   }
 
@@ -625,13 +773,16 @@ export function createView(canvas) {
         slot.mesh.geometry.dispose();
       });
       planetPool.clear();
-      const rgb = starRGB(s.star.teff || 4000);
-      const col = new THREE.Color(rgb[0], rgb[1], rgb[2]);
-      starMesh.material.uniforms.uColor.value.copy(col).multiplyScalar(3.2);
+      const teff = s.star.teff || 4000;
+      const col = sunColorOf(s.star);
+      starMesh.material.uniforms.uColor.value.copy(col).multiplyScalar(teff < 3700 ? 2.4 : 3.2);
       starGlow.material.color.copy(col);
-      const scale = s.star.mass > 0.8 ? 0.72 : 0.4;
+      const scale = Math.max(0.28, (s.star.radius || 0.5) * (teff < 3700 ? 0.7 : 0.85));
       starMesh.scale.setScalar(scale);
-      sky.material.uniforms.uNebula.value.set(s.nebula[0], s.nebula[1], s.nebula[2]);
+      starGlow.scale.set(scale * 7, scale * 7, 1);
+      if (sky.material.uniforms && sky.material.uniforms.uNebula) {
+        sky.material.uniforms.uNebula.value.set(s.nebula[0], s.nebula[1], s.nebula[2]);
+      }
       for (const p of s.planets) {
         const a = p.aAU * 70;
         const pts = [];
@@ -663,6 +814,9 @@ export function createView(canvas) {
       slot.atmo.scale.copy(slot.mesh.scale);
       const look = api.look(b.id);
       paintPlanet(slot.mesh.material, look, sunPos, color, camPos, clock.t, b.aAU || 1);
+      const flux = (s.star.L || 1) / Math.max(0.0004, (b.aAU || 1) * (b.aAU || 1));
+      slot.mesh.material.uniforms.uFlux.value = flux;
+      slot.mesh.material.uniforms.uLocked.value = /^(proxima-|trappist-|savage-)/.test(b.id) ? 1 : 0;
       slot.clouds.material.uniforms.uSunPos.value.copy(sunPos);
       slot.clouds.material.uniforms.uTime.value = clock.t + (b.a || 0);
       slot.clouds.material.uniforms.uCloud.value = look.cloud;
@@ -692,18 +846,43 @@ export function createView(canvas) {
     const ship = api.g.ship;
     shipRoot.position.set(ship.x, 0, ship.y);
     shipRoot.rotation.y = -ship.heading;
-    const heat = api.g.cinematic && api.g.cinematic.kind === 'entry' ? Math.min(1, api.g.cinematic.t / 2) : 0;
-    plasma.material.opacity = heat * 0.85;
-    plasma.scale.setScalar(1 + heat * 1.8);
+    const heat = api.g.cinematic && api.g.cinematic.kind === 'entry' ? Math.min(1, api.g.cinematic.t / 1.2) : 0;
+    plasma.material.opacity = heat * 0.7;
+    plasma.scale.setScalar(1 + heat * 1.4);
+    const objId = api.objectiveId && api.objectiveId();
+    const obj = list.find((b) => b.id === objId);
+    if (obj) {
+      const pulse = 0.85 + Math.sin(clock.t * 3) * 0.12;
+      marker.position.set(obj.x, obj.radius * 1.6, obj.y);
+      marker.scale.setScalar(Math.max(0.06, obj.radius * 2.2) * pulse);
+      marker.visible = !api.g.landed;
+      const days = obj.period ? obj.period.toFixed(2) + ' d' : '';
+      let teq = '';
+      try { teq = Math.round(api.climateFor(obj.id).Teq) + ' K'; } catch (err) { teq = ''; }
+      setTextSprite(label, obj.name + '\n' + (obj.aAU ? obj.aAU.toFixed(3) : '') + ' AU  ' + days + '  ' + teq);
+      label.visible = false;
+    } else marker.visible = false;
+    if (shipMesh.userData.sail) shipMesh.userData.sail.visible = !!(api.g.tech && api.g.tech.sail);
+    if (shipMesh.userData.plume) {
+      const th = Math.abs(api.g.ship.throttle || 0);
+      const drive = api.g.ship.drive;
+      const plumeColor = drive === 'ion' ? 0x7ecbff : drive === 'ramjet' ? 0xe7e2ff : 0xffa24a;
+      shipMesh.userData.plume.material.color.set(plumeColor);
+      shipMesh.userData.plume.material.opacity = api.g.landed ? 0 : Math.min(0.85, th);
+      shipMesh.userData.plume.scale.set(1, 1, 0.35 + th * 2.4);
+    }
+    const puff = Math.min(0.75, Math.abs(api.g.turnRate || 0) * 1.4);
+    (shipMesh.userData.rcs || []).forEach((p) => { p.material.opacity = api.g.landed ? 0 : puff; });
   }
 
   function dressShip(design) {
-    const next = (design && design.hull) + (design && design.primary) + (design && design.accent);
+    const sail = !!(apiRef && apiRef.g && apiRef.g.tech && apiRef.g.tech.sail);
+    const next = (design && design.hull) + (design && design.primary) + (design && design.accent) + (sail ? 's' : '');
     if (shipRoot.userData.key === next) return;
     shipRoot.userData.key = next;
     shipRoot.remove(shipMesh);
     shipMesh.traverse((obj) => { if (obj.geometry) obj.geometry.dispose(); });
-    shipMesh = buildShip(design || {});
+    shipMesh = buildShip(design || {}, sail);
     shipRoot.add(shipMesh);
   }
 
@@ -729,6 +908,7 @@ export function createView(canvas) {
 
   function frame(api, dt, present) {
     if (failed) return;
+    apiRef = api;
     clock.t += dt;
     const mode = present.mode;
     const showHero = mode === 'title' || mode === 'hub';
@@ -775,25 +955,28 @@ export function createView(canvas) {
       dressShip(api.g.shipDesign);
       const ship = api.g.ship;
       const spd = Math.hypot(ship.vx, ship.vy);
-      let back = 1.15 + Math.min(1.6, spd * 0.25);
+      let back = 0.34;
       const list = api.bodies();
       let nearR = 99;
       for (const b of list) {
         if (b.kind !== 'planet') continue;
         nearR = Math.min(nearR, Math.hypot(ship.x - b.x, ship.y - b.y) / Math.max(0.05, b.radius));
       }
-      if (nearR < 8) back = 0.42 + nearR * 0.04;
+      if (nearR < 10) back = 0.24;
       const cin = api.g.cinematic;
-      if (cin && cin.kind === 'launch') back = lerp(4.5, 1.1, Math.min(1, cin.t / cin.dur));
-      if (cin && cin.kind === 'entry') back = 0.28;
-      if (cin && cin.kind === 'sling') back = 2.4;
+      if (cin && cin.kind === 'launch') back = lerp(1.2, 0.34, Math.min(1, cin.t / cin.dur));
+      if (cin && cin.kind === 'entry') back = 0.2;
+      if (cin && cin.kind === 'sling') back = 0.7;
       const hx = Math.cos(ship.heading);
       const hz = Math.sin(ship.heading);
-      const want = new THREE.Vector3(ship.x - hx * back, back * 0.42, ship.y - hz * back);
-      const look = new THREE.Vector3(ship.x + hx * 0.6, 0.02, ship.y + hz * 0.6);
+      const want = new THREE.Vector3(ship.x - hx * back, back * 0.38, ship.y - hz * back);
+      const look = new THREE.Vector3(ship.x + hx * 0.12, 0.01, ship.y + hz * 0.12);
       const k = 1 - Math.pow(0.0015, Math.max(0.016, dt));
       camera.position.lerp(want, Math.min(1, k));
       camera.lookAt(look);
+      key.position.set(camera.position.x + 1.2, camera.position.y + 1.6, camera.position.z + 0.4);
+      key.target.position.set(ship.x, 0, ship.y);
+      key.target.updateMatrixWorld();
       placeFlares(new THREE.Vector3(0, 0, 0));
     }
     if (mode !== 'flight') {
@@ -820,7 +1003,9 @@ export function createView(canvas) {
     paintPlanet(ground.material, look, sun, color, camera.position, clock.t, 5);
     surfCloud.material.uniforms.uTime.value = clock.t;
     surfCloud.material.uniforms.uCloud.value = look.cloud || 0.2;
-    sky.material.uniforms.uNebula.value.set(color.r * 0.25, color.g * 0.15, 0.05);
+    if (sky.material.uniforms && sky.material.uniforms.uNebula) {
+      sky.material.uniforms.uNebula.value.set(color.r * 0.25, color.g * 0.15, 0.05);
+    }
     const rescue = api.g.surface && api.g.surface.kind === 'rescue';
     if (rescue) {
       lander.position.set(api.g.surface.wreckX * 0.35, 0, api.g.surface.wreckY * 0.35);

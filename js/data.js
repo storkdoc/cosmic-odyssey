@@ -214,7 +214,7 @@ export function getPlanet(id) {
 
 export const DRIVES = {
   chem: {
-    id: 'chem', name: 'Chemical', thrust: 0.11, ve: 1.75, fuel: 'prop',
+    id: 'chem', name: 'Chemical', thrust: 0.22, ve: 1.75, fuel: 'prop',
     tip: 'Burning fuel you carry. Strong for a short time. The tanks are the limit.'
   },
   ion: {
@@ -236,7 +236,7 @@ export const DRIVES = {
 export const TECH = [
   {
     id: 'sail', name: 'Solar sails', needs: [],
-    cost: { iron: 6, ice: 8, research: 8 },
+    cost: { iron: 3, ice: 3, research: 0 },
     about: 'A mirrored sheet, kilometres wide. Sunlight pushes it, and between stars you carry no fuel for the coast.'
   },
   {
@@ -360,38 +360,38 @@ export const THREATS = [
 
 export const PERKS = [
   {
-    id: 'coins', tier: 'In-Game Currency', price: '$29 and up',
-    title: 'Challenge Coins', who: 'all',
-    text: 'The campaign’s currency. The founding purse starts at 75 coins, the amount on the E3 special and the VIP helmet tier. Missions and the trading outpost add more. Every player earns them.'
+    id: 'coins', name: 'Challenge Coins', who: 'all',
+    title: 'Challenge Coins',
+    text: 'Earned by flying, mining, and finishing work. The founding purse starts with 75. There is nothing to pay for.'
   },
   {
-    id: 'helmet', tier: 'Private VIP Early Beta & Special Helmet', price: '$65',
-    title: 'Special Holographic Character Helmet', who: 'backer',
+    id: 'helmet', name: 'Holographic helmet', who: 'backer',
+    title: 'Special Holographic Character Helmet',
     text: 'A booster for the suit. On a surface it has the thrust of a jet pack, so an EVA crosses more ground and lifts clear of the rocks.'
   },
   {
-    id: 'suit', tier: 'Design Your Own Suit', price: '$350',
-    title: 'Design Your Own Suit', who: 'all',
+    id: 'suit', name: 'Suit skins', who: 'all',
+    title: 'Design Your Own Suit',
     text: 'A suit-skin editor. Any player can wear the skins. The design is saved with the voyage.'
   },
   {
-    id: 'ship', tier: 'Design Your Own Ship', price: '$500',
-    title: 'Design Your Own Ship', who: 'all',
+    id: 'ship', name: 'Ship designer', who: 'all',
+    title: 'Design Your Own Ship',
     text: 'Shape a hull and fly it. With backer cosmetics on, the design joins the shared Armada under the designer’s name.'
   },
   {
-    id: 'vip', tier: 'Private Early VIP Beta', price: '$65',
-    title: 'Private VIP Beta', who: 'backer',
-    text: 'A badge. The early beta was the promise of a first look, and of a voice in how the voyage was built.'
+    id: 'vip', name: 'VIP Beta', who: 'backer',
+    title: 'Private VIP Beta',
+    text: 'A badge for the people who were promised a first look, and a voice in how the voyage was built.'
   },
   {
-    id: 'exclusive', tier: 'Backer exclusives', price: 'Backer tiers',
-    title: 'Exclusive backer items', who: 'backer',
+    id: 'exclusive', name: 'Backer items', who: 'backer',
+    title: 'Exclusive backer items',
     text: 'The founding crest on the suit, the VIP comms mark on the HUD, and a nameplate when a ship joins the Armada.'
   },
   {
-    id: 'namesake', tier: 'In-Game Item Named for You', price: '$500',
-    title: 'Namesake Game Item', who: 'founder',
+    id: 'namesake', name: 'Namesake Item', who: 'founder',
+    title: 'Namesake Item',
     text: 'Steve Behram’s namesake item is the Behram Universe Forge, the workshop where a universe is designed, named, and shared.'
   }
 ];
@@ -412,6 +412,21 @@ export const HULLS = [
 
 /* Fictional guest charts. Original names only. No real people. */
 export const FEATURED = [
+  {
+    id: 'savage-planets',
+    name: 'Savage Planets',
+    author: 'Savage Planets',
+    about: 'Where Dreams and Nightmares Collide. A red-and-white gate into a darker multiverse.',
+    challenge: 'Survey the dream-side world, then the night-side world. Both are real.',
+    goal: { type: 'survey', planet: 'savage-dream' },
+    star: { mass: 0.42, L: 0.04, teff: 3200, spectral: 'M2', radius: 0.48 },
+    nebula: [0.55, 0.08, 0.08],
+    brand: true,
+    planets: [
+      { id: 'savage-dream', name: 'Dream', aAU: 0.12, mass: 0.9, radius: 0.98, atmosphere: 'n2o2', pressure: 0.9, water: 0.45, albedo: 0.32, greenhouse: 0.7, note: 'The day side is pale and quiet. The terminator is where the stories start.' },
+      { id: 'savage-night', name: 'Nightmare', aAU: 0.28, mass: 1.4, radius: 1.15, atmosphere: 'co2', pressure: 1.6, water: 0.15, albedo: 0.18, greenhouse: 1.15, moon: true, note: 'A red-lit world. The ice on the far side does not forgive a long night.' }
+    ]
+  },
   {
     id: 'quiet-harbor',
     name: 'Quiet Harbor',

@@ -125,6 +125,33 @@ export function createAudio(rand = Math.random) {
     api.unlocked = true;
     shown.volume = level();
     hidden.volume = 0;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !api._ctx) {
+        const ctx = new AC();
+        const resume = ctx.resume();
+        if (resume && resume.catch) resume.catch(() => {});
+        api._ctx = ctx;
+        const blip = (freq, dur, type, gain) => {
+          if (!ctx || api.muted) return;
+          const t = ctx.currentTime;
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = type || 'sine';
+          o.frequency.setValueAtTime(freq, t);
+          g.gain.setValueAtTime(gain, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+          o.connect(g); g.connect(ctx.destination);
+          o.start(t); o.stop(t + dur + 0.02);
+        };
+        api.sfx = {
+          mine: () => blip(140, 0.04, 'square', 0.012),
+          land: () => blip(220, 0.18, 'sine', 0.03),
+          ping: () => blip(660, 0.08, 'sine', 0.03),
+          rescue: () => blip(440, 0.22, 'triangle', 0.04)
+        };
+      }
+    } catch (e) { /* effects stay silent if the context is blocked */ }
     const p1 = shown.play();
     const p2 = hidden.play();
     if (p1 && p1.catch) p1.catch(() => {});

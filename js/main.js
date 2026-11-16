@@ -67,13 +67,45 @@ function starSpec() {
   return table[draft.starId] || table.G;
 }
 
+let mineHeld = false;
 $('begin').addEventListener('click', () => {
   audio.start();
   audio.score('open');
   cue = 'open';
-  phase = 'fly';
-  fly = 0;
+  phase = 'brand';
   document.body.classList.add('flying');
+  $('present').classList.add('show');
+  $('title').style.visibility = 'hidden';
+});
+
+function enterFlight() {
+  if (phase === 'play') return;
+  phase = 'play';
+  $('present').classList.remove('show');
+  $('title').style.visibility = '';
+  document.body.classList.remove('cinema', 'flying');
+  document.body.classList.add('play', 'past-title');
+  if (!sim) sim = createGame();
+  if (window.MoodSticker) {
+    MoodSticker.game('cosmic-odyssey');
+    MoodSticker.screen('flight');
+    MoodSticker.bindPause({
+      pause() { if (sim) sim.g.ship.throttle = 0; },
+      resume() {}
+    });
+  }
+  renderDock();
+}
+
+addEventListener('keydown', (e) => {
+  if (phase === 'brand' || phase === 'titles' || phase === 'fly') {
+    if (e.code !== 'Tab') { e.preventDefault(); enterFlight(); }
+  }
+});
+document.addEventListener('pointerdown', (e) => {
+  if (phase !== 'brand' && phase !== 'titles' && phase !== 'fly') return;
+  if (e.target.closest && e.target.closest('#begin, .sp-link')) return;
+  enterFlight();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -85,14 +117,7 @@ document.addEventListener('pointerdown', (e) => {
   finishFly();
 });
 
-function finishFly() {
-  if (phase !== 'fly') return;
-  phase = 'gate';
-  document.body.classList.remove('flying', 'cinema');
-  document.body.classList.add('past-title');
-  if (hasSave()) $('choose').classList.add('show');
-  else openHow(true);
-}
+function finishFly() { enterFlight(); }
 
 $('continue').addEventListener('click', () => {
   $('choose').classList.remove('show');
@@ -113,6 +138,25 @@ $('howto-go').addEventListener('click', () => {
   try { localStorage.setItem('cosmic-odyssey.howto', '1'); } catch (err) { /* ignore */ }
 });
 $('btn-help').addEventListener('click', () => openHow(false));
+document.addEventListener('click', (e) => {
+  const a = e.target.closest && e.target.closest('a.sp-link');
+  if (!a) return;
+  usage('savageplanets_click', a.getAttribute('href') || 'https://savageplanets.com');
+});
+function holdButton(id, down, up) {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); down(); });
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+}
+holdButton('act-thrust', () => { thrustHeld = true; }, () => { thrustHeld = false; });
+holdButton('act-mine', () => { mineHeld = true; }, () => { mineHeld = false; });
+holdButton('act-rescue', () => { rescueHeld = true; }, () => { rescueHeld = false; });
+$('act-land').addEventListener('click', () => { if (sim) toast(sim.tryLand()); });
+$('act-sail').addEventListener('click', () => { if (sim) toast(sim.fitSail()); });
+$('act-cross').addEventListener('click', () => { if (sim) toast(sim.crossTrappist()); });
+$('act-forge').addEventListener('click', () => { if (phase === 'play') openPanel('forge'); });
 
 function openHow(blocking) {
   $('howto').classList.add('show');
@@ -120,9 +164,7 @@ function openHow(blocking) {
 }
 
 function startPlay() {
-  phase = 'play';
-  document.body.classList.remove('cinema', 'flying');
-  document.body.classList.add('play', 'past-title');
+  enterFlight();
   if (window.MoodSticker) {
     MoodSticker.game('cosmic-odyssey');
     MoodSticker.screen('hub');
@@ -145,15 +187,12 @@ function screenName() {
 }
 
 function renderDock() {
-  const g = sim.g;
-  const items = [];
-  if (g.docked || place === 'oneill') {
-    items.push(['deck', 'Flight Deck'], ['lab', 'Planetary lab'], ['missions', 'Mission Control'], ['trade', 'Trading outpost'], ['forge', NAMES.forge], ['catalog', 'Charts'], ['oneill', 'O’Neill colony'], ['vault', 'Backer Vault'], ['plaque', 'Plaque'], ['credits', 'Credits']);
-  } else if (g.landed) {
-    items.push(['surface', 'Surface lab'], ['threats', 'Threats'], ['trade', 'Field cache'], ['lift', 'Lift off']);
-  } else {
-    items.push(['flight', 'Helm'], ['nav', 'Plot course'], ['scan', 'Scan'], ['land', 'Entry'], ['dock', 'Dock']);
-  }
+  const items = [
+    ['deck', 'Flight Deck'], ['lab', 'Lab'], ['missions', 'Missions'], ['trade', 'Outpost'],
+    ['forge', 'Forge'], ['catalog', 'Charts'], ['oneill', 'Colony'], ['vault', 'Backers'],
+    ['plaque', 'Plaque'], ['credits', 'Credits']
+  ];
+  if (sim.g.landed) items.unshift(['surface', 'Surface'], ['threats', 'Threats'], ['lift', 'Lift']);
   $('dock').innerHTML = items.map(([id, label]) => `<button type="button" data-open="${id}">${escapeHtml(label)}</button>`).join('');
 }
 
@@ -477,7 +516,7 @@ function fillTrade(root) {
   root.innerHTML = `<h2>Trading outpost</h2><p class="sub">Challenge Coins on hand: ${Math.floor(sim.g.coins)}. Ore in, fuel and xenon out.</p>`;
   const row = document.createElement('div');
   row.className = 'row';
-  [['sell-iron', 'Sell 3 iron · 6'], ['sell-ice', 'Sell 3 ice · 4'], ['buy-fuel', 'Buy fuel · 6'], ['buy-xe', 'Buy xenon · 8']].forEach(([id, label]) => {
+  [['sell-iron', 'Trade 3 iron for 6 coins'], ['sell-ice', 'Trade 3 ice for 4 coins'], ['buy-fuel', 'Take fuel for 6 coins'], ['buy-xe', 'Take xenon for 6 coins']].forEach(([id, label]) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = label;
@@ -491,6 +530,7 @@ function fillForge(root) {
   const star = starSpec();
   root.innerHTML = `<h2>${escapeHtml(NAMES.forge)}</h2><p class="sub">Steve Behram’s namesake backer item. Design a star and its worlds. The lab computes the habitable zone. Publishing shares the chart. Actualizing commits the chemistry, and it does not turn back.</p>`;
   const name = field('Universe name', draft.name);
+  name.input.id = 'uni-name';
   const author = field('Your name on the chart', draft.author);
   const about = area('About', draft.about);
   const challenge = area('Challenge for visitors', draft.challenge);
@@ -564,6 +604,7 @@ function fillForge(root) {
   };
   const pub = document.createElement('button');
   pub.type = 'button';
+  pub.id = 'publish-universe';
   pub.className = 'primary';
   pub.textContent = 'Publish';
   pub.onclick = () => {
@@ -571,10 +612,19 @@ function fillForge(root) {
     const rec = recordFromDraft();
     sim.addUniverse(rec);
     sim.save();
+    const status = document.createElement('p');
+    status.id = 'publish-status';
+    status.textContent = 'Sending the chart…';
+    pub.after(status);
     publishUniverse({ ...rec, test: testMode() }).then(() => {
+      sim.g.shared = true;
       usage('universe_published', rec.name);
       sim.say('Published. Other voyages can plot a course here.');
-    }).catch(() => sim.say('The catalog did not take it. It is still saved on this ship.'));
+      status.textContent = 'Published.';
+    }).catch(() => {
+      status.textContent = 'Saved on this ship. The catalog did not answer.';
+      sim.say('Saved on this ship. The catalog did not answer.');
+    });
   };
   const act = document.createElement('button');
   act.type = 'button';
@@ -679,7 +729,7 @@ function fillVault(root) {
   PERKS.forEach((p) => {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `<div class="tier">${escapeHtml(p.tier)} · ${escapeHtml(p.price)}</div><h3>${escapeHtml(p.title)}</h3><p>${escapeHtml(p.text)}</p>`;
+    card.innerHTML = `<div class="kicker">${escapeHtml(p.name || '')}</div><h3>${escapeHtml(p.title)}</h3><p>${escapeHtml(p.text)}</p>`;
     root.appendChild(card);
   });
 }
@@ -688,7 +738,7 @@ function fillPlaque(root) {
   root.innerHTML = `
     <h2>Plaque</h2>
     <div class="card">
-      <div class="tier">Infinity Command · Galactic Coalition</div>
+      <div class="kicker">Infinity Command · Galactic Coalition</div>
       <h3>${escapeHtml(NAMES.founder)}</h3>
       <p>Founding backer and creator of this voyage.</p>
       <p>${escapeHtml(NAMES.plaque)}</p>
@@ -698,7 +748,7 @@ function fillPlaque(root) {
 }
 
 function fillCredits(root) {
-  root.innerHTML = '<h2>Music</h2><p class="sub">Real orchestral and concert-band recordings. Nothing here is synthesized. The sky is procedural.</p>';
+  root.innerHTML = '<h2>Music</h2><p class="sub">Real orchestral and concert-band recordings. Nothing in the score is synthesized. Free forever. No purchases, no ads.</p>';
   TRACKS.forEach((t) => {
     const card = document.createElement('div');
     card.className = 'card';
@@ -706,7 +756,10 @@ function fillCredits(root) {
     root.appendChild(card);
   });
   const sky = document.createElement('p');
-  sky.textContent = 'The Milky Way is drawn in the shader. No sky photograph is shipped.';
+  sky.textContent = 'The Milky Way photograph is ESO/S. Brunier, CC BY 4.0. Free forever. No purchases, no ads.';
+  const sp = document.createElement('p');
+  sp.innerHTML = 'Presented with <a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener">Savage Planets</a>. <a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener">Read the free Savage Planets comic</a>.';
+  root.appendChild(sp);
   root.appendChild(sky);
 }
 
@@ -794,14 +847,18 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'Escape') { closePanel(); place = null; }
   if (e.code === 'KeyL') toast(sim.tryLand());
-  if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey) toast(sim.tryDock());
+  if (e.code === 'KeyB') toast(sim.fitSail());
+  if (e.code === 'KeyT') toast(sim.crossTrappist());
+  if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey) openPanel('forge');
+  if (e.code === 'KeyN') { sim.g.assist = !sim.g.assist; sim.say(sim.g.assist ? 'Assist is flying with you.' : 'Newtonian. You fly the burns yourself.'); }
+  if (e.code === 'KeyI') { sim.say('Infinity Command. The row of buttons is the station.'); }
   if (e.code === 'KeyG') toast(sim.scan());
   if (e.code === 'Tab') { e.preventDefault(); sim.cycleTarget(e.shiftKey ? -1 : 1); }
   if (e.code === 'KeyX') sim.pointAlong(-1);
   if (e.code === 'KeyC') sim.pointAlong(1);
   if (e.code === 'KeyM') sim.g.matching = true;
   if (e.code === 'KeyV') sim.cycleWarp();
-  if (e.code === 'Space') { e.preventDefault(); if (sim.g.landed) sim.g.miner = !sim.g.miner; }
+  if (e.code === 'Space') e.preventDefault();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 
@@ -903,6 +960,7 @@ function readout() {
     <b>${escapeHtml(sim.sys().name)}</b>
     <span>fuel ${g.ship.fuel.toFixed(2)} · Δv ${sim.deltaV().toFixed(2)} · warp ${g.warp}</span>
     <span>${escapeHtml(alt)}</span>
+    <span>${target ? escapeHtml(target.name + ' · ' + (target.aAU ? target.aAU.toFixed(3) + ' AU' : '') + (target.period ? ' · ' + target.period.toFixed(2) + ' d' : '') + ' · ' + Math.round(sim.climateFor(target.id).Teq) + ' K eq') : ''}</span>
     <span>${escapeHtml([lamp, clock, badge, 'coins ' + Math.floor(g.coins)].filter(Boolean).join(' · '))}</span>`;
 }
 
@@ -927,23 +985,35 @@ function applyInput(dt) {
   }
   sim.g.stick.x = stick.on ? stick.x : turn;
   sim.g.stick.y = stick.on ? -stick.y : (keys.KeyW || keys.ArrowUp ? 1 : 0);
+  sim.g.thrusting = thrust > 0.2;
+  sim.g.turnRate = turn;
+  sim.g.mining = !!(keys.Space || mineHeld) && !!sim.g.landed;
   sim.g.rescueHold = (rescueHeld || keys.KeyR) ? 1 : 0;
-  sim.g.jet = (keys.ShiftLeft || keys.ShiftRight || thrustHeld) ? 1 : 0;
+  sim.g.jet = (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0;
   if (!sim.g.docked && !sim.g.landed && !sim.g.matching) {
-    sim.g.ship.heading += turn * 1.5 * dt;
+    if (!sim.g.assist) sim.g.ship.heading += turn * 1.5 * dt;
     sim.g.ship.throttle = Math.max(-1, Math.min(1, thrust));
   } else if (!sim.g.matching) sim.g.ship.throttle = 0;
-  if (sim.g.miner && sim.g.landed && !sim.g.robots.miner) sim.mine(dt);
 }
 
 let missionMark = 0;
 function loop(now) {
-  const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+  const dt = Math.min(0.12, (now - last) / 1000 || 0.016);
   last = now;
-  if (phase === 'fly') {
-    const quick = reduced || /[?&]test=1/.test(location.search);
-    fly += dt / (quick ? 0.45 : 12);
-    if (fly >= 1) finishFly();
+  if (phase === 'brand') {
+    fly += dt;
+    if (fly > 2.2) {
+      phase = 'titles';
+      fly = 0;
+      $('present').classList.remove('show');
+      $('title').style.visibility = '';
+    }
+  } else if (phase === 'titles') {
+    fly += dt;
+    if (fly > 2.1) enterFlight();
+  } else if (phase === 'fly') {
+    fly += dt / (reduced ? 2 : 8);
+    if (fly >= 1) enterFlight();
   }
   if (sim && phase === 'play') {
     applyInput(dt);
@@ -967,7 +1037,17 @@ function loop(now) {
     }
     const next = wantCue();
     if (next !== cue) { cue = next; if (audio.unlocked) audio.score(next); }
-    $('line-text').textContent = sim.g.lineT > 0 ? sim.g.line : sim.hint();
+    const pr = sim.prompt();
+    $('prompt').textContent = pr.text;
+    document.querySelectorAll('#actions button').forEach((b) => b.classList.remove('now'));
+    const act = { thrust: 'act-thrust', land: 'act-land', entry: 'act-land', mine: 'act-mine', sail: 'act-sail', cross: 'act-cross', coast: 'act-cross', drone: 'act-thrust', grab: 'act-rescue', forge: 'act-forge' }[pr.id];
+    if (act && $(act)) $(act).classList.add('now');
+    const iron = Math.min(1, (sim.g.ship.cargo.iron || 0) / 3);
+    const ice = Math.min(1, (sim.g.ship.cargo.ice || 0) / 3);
+    $('minebar').hidden = pr.id !== 'mine' && pr.id !== 'sail';
+    $('minebar').querySelector('i').style.width = ((iron + ice) * 50) + '%';
+    if (pr.id === 'mine' && sim.g.mining && audio.sfx) audio.sfx.mine();
+    $('line-text').textContent = sim.g.lineT > 0 ? sim.g.line : '';
     readout();
     if (window.MoodSticker) MoodSticker.screen(screenName());
     const dockKey = (sim.g.docked ? 'd' : '') + (sim.g.landed ? 'l' : '') + (place || '') + (sim.g.surface && sim.g.surface.kind || '');

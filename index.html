@@ -13,10 +13,20 @@
   <div class="letter top"></div>
   <div class="letter bot"></div>
 
+  <a id="sp-mark" class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener">
+    <img src="assets/brand/savageplanets-mark.png" alt="Savage Planets">
+  </a>
+
+  <section id="present">
+    <img src="assets/brand/savageplanets-logo.png" alt="Savage Planets">
+    <p>presents</p>
+  </section>
+
   <section id="title">
     <h1 class="word">COSMIC ODYSSEY</h1>
     <p class="by">by Steve Behram</p>
     <p class="ded">A gift for the backers who were let down. Let’s build a universe together.</p>
+    <p class="free">Free forever. No purchases, no ads.</p>
     <div class="actions">
       <button class="primary" id="begin" type="button">Begin the voyage</button>
     </div>
@@ -30,17 +40,22 @@
       <button type="button" id="btn-help">How to fly</button>
     </div>
   </div>
+  <div id="prompt"></div>
+  <div id="minebar" hidden><i></i></div>
   <div id="line"><span class="who">LYRA</span><span id="line-text"></span></div>
 
   <nav id="dock"></nav>
 
   <div id="touch">
     <div id="stick" aria-label="Steer"><i></i></div>
-    <div class="pad">
-      <button type="button" data-act="thrust">Thrust</button>
-      <button type="button" data-act="retro">Retro</button>
-      <button type="button" data-act="act">Act</button>
-      <button type="button" data-act="rescue">Rescue</button>
+    <div class="pad" id="actions">
+      <button type="button" id="act-thrust">Thrust</button>
+      <button type="button" id="act-land">Land</button>
+      <button type="button" id="act-mine">Mine</button>
+      <button type="button" id="act-sail">Sail</button>
+      <button type="button" id="act-cross">TRAPPIST</button>
+      <button type="button" id="act-rescue">Rescue</button>
+      <button type="button" id="act-forge">Forge</button>
     </div>
   </div>
 

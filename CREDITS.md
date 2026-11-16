@@ -2,7 +2,11 @@
 
 Cosmic Odyssey is a gift from Steve Behram for the people who backed a 2017 voyage that never shipped. The guide in the game is LYRA, an original hologram. No real person’s name, likeness, or voice is used as that guide, and the game does not use the campaign’s title treatment or logo.
 
-The Milky Way in the sky is drawn by a shader. No sky photograph is shipped.
+The Milky Way sky is a photograph: ESO/S. Brunier, [The Milky Way panorama](https://www.eso.org/public/images/eso0932a/), CC BY 4.0. Star points in front of it are generated in the shader and do not twinkle.
+
+Presented with Savage Planets, https://savageplanets.com . The mark and wordmark are used with permission of Steve Behram. Read the free comic at that site.
+
+Free forever. No purchases, no ads.
 
 ## Music
 

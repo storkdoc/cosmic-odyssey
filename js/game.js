@@ -28,7 +28,12 @@ function fresh() {
     systemId: 'proxima',
     t: 18,
     ship: freshShip(),
-    docked: true,
+    docked: false,
+    assist: true,
+    mining: false,
+    thrusting: false,
+    turnRate: 0,
+    shared: false,
     landed: null,
     surface: null,
     tech: {
@@ -269,11 +274,11 @@ export function createGame(saved) {
     if (Math.abs(th) > 0.01 && d.fuel !== 'none' && g.ship.drive !== 'sail') {
       const tank = d.fuel === 'xe' ? g.ship.xe : g.ship.fuel;
       if (tank > 0.0008) {
-        const acc = (d.thrust * Math.abs(th)) / mass;
+        const acc = (d.thrust * Math.abs(th)) / mass * (g.assist ? 1.65 : 1);
         const dir = g.ship.heading + (th < 0 ? Math.PI : 0);
         ax += Math.cos(dir) * acc;
         ay += Math.sin(dir) * acc;
-        const mdot = (d.thrust * Math.abs(th)) / d.ve * h;
+        const mdot = (d.thrust * Math.abs(th)) / d.ve * h * (g.assist ? 0.28 : 1);
         if (d.fuel === 'xe') g.ship.xe = Math.max(0, g.ship.xe - mdot);
         else g.ship.fuel = Math.max(0, g.ship.fuel - mdot);
       }
@@ -301,16 +306,18 @@ export function createGame(saved) {
     g.threat = null;
     const s = sys();
     if (id === 'proxima') {
-      const list = bodies();
-      const st = station(list);
-      const home = list.find((b) => b.id === 'proxima-b');
-      g.ship.x = st.x;
-      g.ship.y = st.y;
-      g.ship.vx = st.vx;
-      g.ship.vy = st.vy;
-      g.ship.heading = Math.atan2(st.y - home.y, st.x - home.x);
-      g.docked = true;
-      say('Infinity Command has you. The Flight Deck and the Forge are open.');
+      parkNear('proxima-b', 8);
+      g.docked = false;
+      say('Back in the Proxima system. The marker is on Proxima b. Hold W, then L.');
+      return;
+    }
+    if (id === 'trappist' && !g.rescued) {
+      g.mayday = MAYDAY;
+      g.maydayLost = false;
+      parkNear('trappist-e', 14);
+      const idx = s.planets.findIndex((p) => p.id === 'trappist-e');
+      g.target = idx < 0 ? 0 : idx;
+      say('TRAPPIST-1 e. The cutter is on that world. Press L and the ship flies the corridor.');
       return;
     }
     const list = bodies();
@@ -324,11 +331,7 @@ export function createGame(saved) {
     g.ship.vy = v * 0.92;
     g.ship.heading = Math.PI / 2;
     g.target = 0;
-    if (id === 'trappist' && !g.rescued) {
-      g.mayday = MAYDAY;
-      g.maydayLost = false;
-      say('TRAPPIST-1. Seven worlds, one distress call. Scan them. The cells will not wait.');
-    } else if (s.clock && !g.goals[s.id]) {
+    if (s.clock && !g.goals[s.id]) {
       g.sideClock = s.clock;
       say(s.challenge || s.blurb);
     } else {
@@ -356,8 +359,8 @@ export function createGame(saved) {
         g.research += 4;
         const rescueHere = g.mayday != null && p.id === 'trappist-e' && !g.rescued;
         if (rescueHere) {
-          const ang = Math.random() * Math.PI * 2;
-          const rad = 18 + Math.random() * 14;
+          const ang = 0.7;
+          const rad = 36;
           g.surface = {
             kind: 'rescue',
             x: Math.cos(ang + Math.PI) * 8,
@@ -444,7 +447,11 @@ export function createGame(saved) {
         say('The lantern clock ran out. Plot the course again and the chart resets.');
       }
     }
-    if (g.cinematic && (g.cinematic.kind === 'depart' || g.cinematic.kind === 'entry')) return;
+    if (g.cinematic && g.cinematic.kind === 'entry') {
+      flyCorridor();
+      return;
+    }
+    if (g.cinematic && g.cinematic.kind === 'depart') return;
     if (g.docked) {
       g.t += dt;
       g.ship.throttle = 0;
@@ -455,6 +462,7 @@ export function createGame(saved) {
       stepSurface(dt);
       return;
     }
+    if (g.assist && Math.abs(g.ship.throttle) > 0.08) aimAtObjective();
     applyMatch(dt);
     let scale = g.warp;
     if (g.cinematic || Math.abs(g.ship.throttle) > 0.04 || g.matching) scale = 1;
@@ -499,9 +507,9 @@ export function createGame(saved) {
 
   function stepSurface(dt) {
     g.surfaceTime += dt;
-    if (g.miner && g.robots.miner && g.surface && g.surface.kind === 'field' && !(g.threat && g.threat.id === 'quake' && !g.threat.handled)) {
-      const found = findPlanet(g.landed);
-      if (found) mine(dt * (g.tech.nano ? 1.35 : 0.85));
+    if (g.surface && g.surface.kind !== 'rescue' && !(g.threat && g.threat.id === 'quake' && !g.threat.handled)) {
+      if (g.mining) mine(dt * (g.tech.nano ? 8 : 6));
+      else if (g.miner && g.robots.miner) mine(dt * (g.tech.nano ? 1.35 : 0.85));
     }
     if (g.nurture && g.surface && g.surface.kind === 'field') {
       const n = g.nurture;
@@ -536,13 +544,20 @@ export function createGame(saved) {
 
   function stepRescue(dt) {
     const s = g.surface;
-    const dx = g.stick.x;
-    const dy = g.stick.y;
-    const sp = Math.hypot(dx, dy) || 1;
-    const cap = 13;
-    if (sp > 0.08) {
-      s.x += (dx / sp) * Math.min(1, sp) * cap * dt;
-      s.y += (dy / sp) * Math.min(1, sp) * cap * dt;
+    const homeX = s.wreckX - s.x;
+    const homeY = s.wreckY - s.y;
+    const homeD = Math.hypot(homeX, homeY) || 1;
+    if (g.assist && g.thrusting) {
+      s.x += (homeX / homeD) * 18 * dt;
+      s.y += (homeY / homeD) * 18 * dt;
+    } else {
+      const dx = g.stick.x;
+      const dy = g.stick.y;
+      const sp = Math.hypot(dx, dy) || 1;
+      if (sp > 0.08) {
+        s.x += (dx / sp) * Math.min(1, sp) * 14 * dt;
+        s.y += (dy / sp) * Math.min(1, sp) * 14 * dt;
+      }
     }
     const dist = Math.hypot(s.x - s.wreckX, s.y - s.wreckY);
     s.dist = dist;
@@ -673,23 +688,43 @@ export function createGame(saved) {
   }
 
   function tryLand() {
-    if (g.docked || g.landed || g.cinematic) return { ok: false, reason: 'You are not in free flight.' };
-    const b = targetBody();
-    if (!b || b.kind !== 'planet') return { ok: false, reason: 'Select a world.' };
-    const ap = approach(g.ship, b);
-    if (!ap.canLand) {
-      return { ok: false, reason: ap.tooFast ? 'Too fast for the heat shield. Hold RETRO until the relative speed falls.' : 'Closer. The corridor is a low, slow pass.' };
+    if (g.landed) {
+      const why = g.surface && g.surface.kind === 'rescue'
+        ? 'You are down. Hold W to fly the drone, then hold R beside the wreck.'
+        : 'You are on the surface. Hold Space to mine.';
+      say(why);
+      return { ok: false, reason: why };
     }
-    g.cinematic = { kind: 'entry', t: 0, dur: 6.8, planetId: b.id };
-    g.ship.throttle = 0;
+    if (g.cinematic && g.cinematic.kind === 'entry') return { ok: true };
+    if (g.docked) return launch();
+    const list = bodies();
+    const id = objectiveId();
+    const b = list.find((p) => p.id === id) || targetBody(list);
+    if (!b || b.kind !== 'planet') {
+      const why = 'Hold W. The glowing marker is the world.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    if (!g.assist) {
+      const ap = approach(g.ship, b);
+      if (!ap.canLand) {
+        const why = 'Assist is off. Press N to let the ship fly the corridor, or come in slow and low yourself.';
+        say(why);
+        return { ok: false, reason: why };
+      }
+    }
+    const idx = sys().planets.findIndex((p) => p.id === b.id);
+    if (idx >= 0) g.target = idx;
+    g.cinematic = { kind: 'entry', t: 0, dur: 2.5, planetId: b.id };
+    g.ship.throttle = 0.8;
     g.matching = false;
-    say('Entry. Plasma takes the last of the speed. Hold through it.');
+    say('Entry corridor. The assist is lining the ship up on ' + b.name + '.');
     return { ok: true };
   }
 
   function takeoff() {
     if (!g.landed) return { ok: false, reason: 'You are not on a surface.' };
-    if (g.ship.fuel < 0.06 && !(g.tech.ramjet)) return { ok: false, reason: 'Not enough propellant to climb. Refine ice, or buy fuel at the outpost.' };
+    if (g.ship.fuel < 0.06 && !(g.tech.ramjet)) return { ok: false, reason: 'Not enough propellant to climb. Refine ice at the outpost, or split ice into fuel.' };
     g.ship.fuel = Math.max(0, g.ship.fuel - 0.06);
     const list = bodies();
     const p = list.find((b) => b.id === g.landed);
@@ -713,7 +748,8 @@ export function createGame(saved) {
   }
 
   function scan() {
-    if (g.landed || g.docked) return { ok: false, reason: 'Probes launch from free flight.' };
+    if (g.landed) return { ok: false, reason: 'Lift off first. Probes go out from orbit.' };
+    if (g.docked) return { ok: false, reason: 'Press L to leave the mast, then scan.' };
     const b = targetBody();
     if (!b || b.kind !== 'planet') return { ok: false, reason: 'Select a world.' };
     const d = Math.hypot(g.ship.x - b.x, g.ship.y - b.y);
@@ -822,7 +858,7 @@ export function createGame(saved) {
     g.landed = null;
     g.surface = null;
     g.matching = false;
-    g.cinematic = { kind: 'depart', t: 0, dur: 7.2, to: id };
+    g.cinematic = { kind: 'depart', t: 0, dur: 2.6, to: id };
     say(g.tech.ramjet && dest.id !== 'proxima' ? TIPS.ramjet : (TIPS[dest.id] || 'Sail deployed. The coast is the quiet part.'));
     return { ok: true };
   }
@@ -1009,6 +1045,7 @@ export function createGame(saved) {
       mined: g.mined, landedOnce: g.landedOnce, rescued: g.rescued, mayday: g.mayday,
       maydayLost: g.maydayLost, sideClock: g.sideClock, overrides: g.overrides, life: g.life,
       bestLife: g.bestLife, warp: g.warp, target: g.target, sailOn: g.sailOn, shieldOn: g.shieldOn,
+      assist: g.assist !== false, shared: !!g.shared,
       surface: g.surface && g.surface.kind === 'rescue' ? g.surface : (g.landed ? { kind: 'field' } : null),
       coins: g.coins, backer: g.backer, founder: true, suit: g.suit, shipDesign: g.shipDesign,
       robots: g.robots, universes: g.universes, actualized: g.actualized, logged: g.logged,
@@ -1026,6 +1063,129 @@ export function createGame(saved) {
     return clean;
   }
 
+  function objectiveId() {
+    if (g.systemId === 'trappist' && !g.rescued) return 'trappist-e';
+    if (g.systemId === 'proxima' && !g.tech.sail) return 'proxima-b';
+    if (g.systemId === 'savage-planets') return 'savage-dream';
+    const t = targetBody();
+    return t && t.id;
+  }
+
+  function objectiveBody() {
+    const list = bodies();
+    return list.find((b) => b.id === objectiveId()) || null;
+  }
+
+  function parkNear(planetId, radii) {
+    const list = bodies();
+    const p = list.find((b) => b.id === planetId);
+    if (!p) return;
+    const ang = 0.85;
+    const r = Math.max(p.radius * radii, p.radius + 0.35);
+    g.ship.x = p.x + Math.cos(ang) * r;
+    g.ship.y = p.y + Math.sin(ang) * r;
+    g.ship.vx = p.vx * 0.15;
+    g.ship.vy = p.vy * 0.15;
+    g.ship.heading = Math.atan2(p.y - g.ship.y, p.x - g.ship.x);
+    g.docked = false;
+    g.landed = null;
+    const idx = sys().planets.findIndex((q) => q.id === planetId);
+    if (idx >= 0) g.target = idx;
+  }
+
+  function flyCorridor() {
+    const list = bodies();
+    const p = list.find((b) => b.id === (g.cinematic && g.cinematic.planetId));
+    if (!p) return;
+    const u = Math.min(1, g.cinematic.t / Math.max(0.2, g.cinematic.dur));
+    const ang = 0.65;
+    const r = p.radius * (16 - 13.6 * u);
+    g.ship.x = p.x + Math.cos(ang) * r;
+    g.ship.y = p.y + Math.sin(ang) * r;
+    g.ship.vx = p.vx;
+    g.ship.vy = p.vy;
+    g.ship.heading = Math.atan2(-Math.sin(ang), -Math.cos(ang));
+    g.ship.throttle = 0.9;
+  }
+
+  function aimAtObjective() {
+    const p = objectiveBody();
+    if (!p) return;
+    const dx = p.x - g.ship.x;
+    const dy = p.y - g.ship.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    g.ship.heading = Math.atan2(dy, dx);
+    const closing = Math.min(1.6, 0.7 + dist * 0.15);
+    const tx = (p.vx || 0) + (dx / dist) * closing;
+    const ty = (p.vy || 0) + (dy / dist) * closing;
+    g.ship.vx += (tx - g.ship.vx) * 0.85;
+    g.ship.vy += (ty - g.ship.vy) * 0.85;
+  }
+
+  function nearObjective() {
+    const p = objectiveBody();
+    if (!p) return false;
+    return Math.hypot(g.ship.x - p.x, g.ship.y - p.y) < Math.max(1.35, p.radius * 18);
+  }
+
+  function sailReady() {
+    const cost = (TECH.find((t) => t.id === 'sail') || {}).cost || {};
+    return (g.ship.cargo.iron || 0) >= (cost.iron || 0) && (g.ship.cargo.ice || 0) >= (cost.ice || 0);
+  }
+
+  function prompt() {
+    if (g.cinematic && g.cinematic.kind === 'entry') return { id: 'entry', text: 'The ship is flying the entry corridor.' };
+    if (g.cinematic && g.cinematic.kind === 'depart') return { id: 'coast', text: 'Sail out. The next star is ahead.' };
+    if (!g.tech.sail && g.systemId === 'proxima') {
+      if (g.landed) {
+        if (sailReady()) return { id: 'sail', text: 'Press B to fit the solar sail' };
+        return { id: 'mine', text: 'Hold Space to mine ice and iron' };
+      }
+      if (nearObjective()) return { id: 'land', text: 'Press L to land on Proxima b' };
+      return { id: 'thrust', text: 'Hold W to thrust toward the marker' };
+    }
+    if (!g.tech.sail) return { id: 'sail', text: 'Press B to fit the solar sail' };
+    if (!g.rescued && g.systemId !== 'trappist') return { id: 'cross', text: 'Press T to cross to TRAPPIST-1' };
+    if (!g.rescued) {
+      if (!g.landed) return { id: 'land', text: 'Press L to reach the cutter' };
+      if (g.surface && g.surface.kind === 'rescue') {
+        if ((g.surface.dist == null ? 99 : g.surface.dist) < 4.5) return { id: 'grab', text: 'Hold R to bring the pilot aboard' };
+        return { id: 'drone', text: 'Hold W to fly the drone to the wreck' };
+      }
+    }
+    if (!g.shared) return { id: 'forge', text: 'Press F to open the Behram Universe Forge' };
+    return { id: 'free', text: 'The charts are open. I brings up Infinity Command.' };
+  }
+
+  function fitSail() {
+    if (g.tech.sail) {
+      g.sailOn = true;
+      say('The sail is already drawing light.');
+      return { ok: true };
+    }
+    if (!sailReady()) {
+      const why = 'Keep mining. The sail wants ice and iron, and the bar shows how close you are.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    const res = research('sail');
+    if (res.ok) g.sailOn = true;
+    return res;
+  }
+
+  function crossTrappist() {
+    if (!g.tech.sail && !g.tech.ramjet) {
+      const why = 'Fit the solar sail first. Press B once the ore is aboard.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    if (g.landed) {
+      const up = takeoff();
+      if (!up.ok) return up;
+    }
+    return depart('trappist');
+  }
+
   function actualize(id) {
     const u = (g.universes || []).find((item) => item.id === id);
     if (!u) return { ok: false, reason: 'Save the universe in the Forge first.' };
@@ -1039,13 +1199,20 @@ export function createGame(saved) {
     return { ok: true };
   }
 
+  if (!saved) {
+    parkNear('proxima-b', 34);
+    g.docked = false;
+    g.line = 'Proxima b is marked. Hold W to thrust toward it.';
+    g.lineT = 8;
+  }
+
   return {
     g,
     bodies, station, targetBody, say, climateFor, look, step, launch, tryDock, tryLand, takeoff,
     scan, cycleTarget, cycleWarp, research, refine, depart, setClimate, seed, nudge, hint, missions,
     serialize, save, sys, findPlanet, catalog, pointAlong, trade, buildRobot, respondThreat,
     recharge, visitOneill, settleOneill, freshCompletions, addUniverse, actualize, noteGoal,
-    lockedChem, mine, hydrate,
+    lockedChem, mine, hydrate, prompt, objectiveId, fitSail, crossTrappist, sailReady, nearObjective,
     deltaV() { return deltaV(g.ship, (DRIVES[g.ship.drive] || DRIVES.chem).ve || 1.75); },
     mass() { return shipMass(g.ship); }
   };
