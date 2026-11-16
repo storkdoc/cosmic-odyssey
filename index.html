@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <title>Cosmic Odyssey by Steve Behram</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23e25b1a' stroke-width='1.5'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23E03A3A' stroke-width='1.5'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="cinema">
@@ -13,142 +13,101 @@
   <div class="letter top"></div>
   <div class="letter bot"></div>
 
-  <a id="sp-mark" class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener">
-    <img src="assets/brand/savageplanets-mark.png" alt="Savage Planets">
+  <a id="sp-mark" class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener" aria-label="SavagePlanets">
+    <img class="brand mark" src="assets/brand/savageplanets-mark.png" width="512" height="512" alt="SavagePlanets">
   </a>
 
-  <section id="present">
-    <img src="assets/brand/savageplanets-logo.png" alt="Savage Planets">
+  <section id="present" class="show">
+    <img class="brand wordmark" src="assets/brand/savageplanets-logo.png" width="588" height="420" alt="SavagePlanets">
     <p>presents</p>
   </section>
 
-  <section id="title">
+  <section id="title" hidden>
     <h1 class="word">COSMIC ODYSSEY</h1>
     <p class="by">by Steve Behram</p>
-    <p class="ded">A gift for the backers who were let down. Let’s build a universe together.</p>
+    <p class="ded">A gift for the backers who were let down. Build a solar system, and see what the physics allows.</p>
     <p class="free">Free forever. No purchases, no ads.</p>
+    <p class="presented">Presented with <span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span></p>
     <div class="actions">
       <button class="primary" id="begin" type="button">Begin the voyage</button>
     </div>
   </section>
 
-  <div id="hud">
-    <div class="readout" id="readout"></div>
-    <div class="actions">
-      <button type="button" id="btn-quality">Quality</button>
-      <button type="button" id="btn-sound">Sound</button>
-      <button type="button" id="btn-help">How to fly</button>
-      <button type="button" id="open-ruler">Ruler</button>
+  <section id="atelier" hidden>
+    <nav class="steps" aria-label="System builder">
+      <button type="button" id="step-stars" class="on">Stars</button>
+      <button type="button" id="step-worlds">Worlds</button>
+      <button type="button" id="step-moons">Moons</button>
+      <button type="button" id="step-awaken">Awaken</button>
+    </nav>
+    <figure id="gate">
+      <img id="gate-mark" class="brand mark" src="assets/brand/savageplanets-mark.png" width="512" height="512" alt="SavagePlanets">
+      <figcaption><span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span></figcaption>
+    </figure>
+    <div class="sheet" id="step"></div>
+    <p class="foot">Read the free comic at <a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener"><span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span></a>.</p>
+  </section>
+
+  <section id="evolve" hidden>
+    <div class="sheet center">
+      <p class="kicker">Ages</p>
+      <h2>Life finds a solvent, or it does not</h2>
+      <p id="life-card"></p>
+      <button type="button" class="primary" id="launch">Launch the survey craft</button>
     </div>
-  </div>
-  <div id="prompt"></div>
-  <div id="minebar" hidden><i></i></div>
-  <div id="line"><span class="who">LYRA</span><span id="line-text"></span></div>
+  </section>
 
-  <nav id="dock"></nav>
-
-  <div id="touch">
-    <div id="stick" aria-label="Steer"><i></i></div>
-    <div class="pad" id="actions">
-      <button type="button" id="act-thrust">Thrust</button>
+  <section id="flight-hud" hidden>
+    <div class="readout" id="flight-readout"></div>
+    <p id="ship-blurb"></p>
+    <div class="targets" id="targets"></div>
+    <div class="pad">
+      <button type="button" id="act-orbit">Orbit</button>
       <button type="button" id="act-land">Land</button>
-      <button type="button" id="act-mine">Mine</button>
-      <button type="button" id="act-sail">Sail</button>
-      <button type="button" id="act-cross">TRAPPIST</button>
-      <button type="button" id="act-rescue">Rescue</button>
-      <button type="button" id="act-forge">Loom</button>
-      <button type="button" id="act-colony">Colony</button>
-      <button type="button" id="act-habitat">Habitat</button>
+      <button type="button" id="act-scan">Scan</button>
+      <button type="button" id="act-contact">Contact</button>
       <button type="button" id="act-codex">Codex</button>
-      <button type="button" id="act-visit">Visit</button>
-      <button type="button" id="act-joint">Relay</button>
-      <button type="button" id="act-log">Log</button>
+      <button type="button" id="lift">Lift</button>
     </div>
-  </div>
-
-  <section class="panel" id="panel" role="dialog" aria-modal="true"></section>
-
-  <div id="choose">
-    <div class="sheet">
-      <h2>Infinity Command</h2>
-      <p>A voyage is already saved on this ship.</p>
-      <div class="row">
-        <button class="primary" type="button" id="continue">Continue</button>
-        <button type="button" id="anew">New voyage</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="howto">
-    <div class="sheet">
-      <h2>How to fly</h2>
-      <ul>
-        <li><kbd>A</kbd> <kbd>D</kbd> or drag to turn. <kbd>W</kbd> thrusts, <kbd>S</kbd> brakes. On a phone, use the stick and the thrust button.</li>
-        <li><kbd>X</kbd> points retrograde, against your path. That burn drops you toward a world. <kbd>C</kbd> points prograde. <kbd>M</kbd> holds a matching burn.</li>
-        <li>When LAND lights, you are slow enough for entry. Plasma takes the rest.</li>
-        <li>Scan a world from close orbit. Mine, then change its air, warmth, and water. Seeding is a promise you have to keep steady.</li>
-        <li>The Behram Loom weaves a chart other players can visit. Actualizing a world does not turn back.</li>
-        <li>The corner mark takes a rating: Fun, Okay, or Skip. Nothing is required.</li>
-      </ul>
-      <button class="primary" type="button" id="howto-go">To the station</button>
-    </div>
-  </div>
-
-  <section id="design" hidden>
-    <div class="sheet wide">
-      <p class="kicker">The Behram Loom</p>
-      <h2>Weave your starting system</h2>
-      <p>The central body sets the clock. Life is not yours to paint. It follows from the light, the gravity, and the radiation.</p>
-      <div id="centers" class="row"></div>
-      <p id="cosmic-clock"></p>
-      <p id="center-lesson"></p>
-      <label class="kicker">Entry on the ruler
-        <input id="entry-year" type="range" min="0" max="50000000" value="10000000" step="250000">
-      </label>
-      <p id="entry-readout">Choose a central body. The entry year has to be a year the star exists.</p>
-      <label class="kicker"><input type="checkbox" id="dark-forest" checked> Silence. Do not broadcast. Speculation, not a threat from other players.</label>
-      <div class="row">
-        <button type="button" id="place-world">Place a world</button>
-        <button type="button" id="launch-system" class="primary" disabled>Launch</button>
-      </div>
-      <p id="life-guide"></p>
+    <div class="codex-row">
+      <button type="button" data-codex="kepler">Kepler</button>
+      <button type="button" data-codex="hz">Zone</button>
+      <button type="button" data-codex="roche">Roche</button>
+      <button type="button" data-codex="light">Light-time</button>
+      <button type="button" data-codex="life">Solvents</button>
     </div>
   </section>
-  <section id="ruler" hidden>
-    <div class="sheet wide">
-      <p class="kicker">Ruler</p>
-      <h2>One timeline. No universal now.</h2>
-      <p id="ruler-note"></p>
-      <div id="ruler-track"></div>
-      <button type="button" id="ruler-close">Close</button>
-    </div>
-  </section>
-  <section id="log-panel" hidden>
-    <div class="sheet wide">
-      <p class="kicker">Contact Log</p>
-      <h2>Signals in the galaxy</h2>
-      <p id="log-count"></p>
-      <div id="log-list"></div>
-      <div class="row">
-        <button type="button" id="research-gw">Build a gravitational-wave receiver</button>
-        <button type="button" id="flyby-seed">First-contact flyby</button>
-        <button type="button" id="log-close">Close</button>
-      </div>
-      <p id="flyby-card"></p>
-    </div>
-  </section>
-  <section id="codex-card" hidden>
+
+  <section id="scan" hidden>
     <div class="sheet">
-      <p class="kicker">Discovery</p>
+      <p class="kicker">Sensors</p>
+      <h2>Composition, density, temperature, life</h2>
+      <p id="scan-card"></p>
+      <button type="button" id="scan-close">Close</button>
+    </div>
+  </section>
+
+  <section id="contact" hidden>
+    <div class="sheet">
+      <p class="kicker">Contact</p>
+      <h2>A signal is an arrival</h2>
+      <p id="contact-card"></p>
+      <button type="button" id="contact-close">Close</button>
+    </div>
+  </section>
+
+  <section id="codex" hidden>
+    <div class="sheet">
+      <p class="kicker">Codex</p>
       <h2 id="codex-title"></h2>
       <p id="codex-principle"></p>
       <p id="codex-note"></p>
-      <p><a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener">Explore more worlds at Savage Planets</a></p>
+      <p><a id="codex-brand" class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener"></a></p>
       <button type="button" id="codex-close">Keep the page</button>
     </div>
   </section>
-  <div id="fallback"><p>This voyage needs WebGL. A current browser on this device can show it.</p></div>
+
   <script src="js/mood-sticker.js"></script>
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/odyssey/app.js"></script>
 </body>
 </html>

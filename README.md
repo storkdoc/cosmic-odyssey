@@ -6,57 +6,33 @@ A cinematic, science-based voyage in the browser. You leave Infinity Command, fl
 
 In 2017 a campaign promised a space game, took support from 7,207 people, went quiet in 2020, and never shipped. This is Steve’s gift to the people who were let down: **let’s build a universe together.**
 
-Free forever. No purchases, no ads. Presented with [Savage Planets](https://savageplanets.com). [Read the free Savage Planets comic](https://savageplanets.com).
+Free forever. No purchases, no ads. Presented with [SavagePlanets](https://savageplanets.com). [Read the free SavagePlanets comic](https://savageplanets.com).
 
 The guide is LYRA, an original hologram science guide of the Galactic Coalition. Play it at [https://storkdoc.github.io/cosmic-odyssey/](https://storkdoc.github.io/cosmic-odyssey/).
 
 ## The voyage
 
-You design a starting system first, on a fixed galactic ruler. Year 0 never moves, and the wall clock does not push it. Each civilization is a window on that ruler. Then you are in flight, with one prompt at a time. Assist is on: hold W toward the marker, then press L and the ship flies the entry corridor. A tap or a key skips the Savage Planets card and the title. The first tap also starts the music. N turns assist off if you want the burns yourself. The ruler, the windows, and the light-travel rules are in `TIME.md`.
+You design a solar system from scratch. Choose zero to three stars and a real spectral type. Two stars are arranged as S-type (a world orbits one star) or P-type (worlds orbit both). Three stars are a hierarchy, and the builder warns when the outer star is too close. Add worlds with composition, orbital distance, radius, and density. Add moons and an asteroid belt. Every star, planet, and moon has a generated name you can edit.
 
-From the station:
+The panel updates as you move a control: habitable zone, equilibrium and surface temperature, surface gravity, escape speed, orbital period, and Roche and Hill checks for moons.
 
-- **Flight Deck** — name a hull, pick dart, ring, or hauler, and choose a drive.
-- **Planetary lab** — research the nine gates, style a suit, build a miner and a watcher satellite.
-- **Mission Control** — the board, from the Proxima shakedown through the TRAPPIST rescue to the Behram Star.
-- **Trading outpost** — Challenge Coins for ore, fuel, and xenon.
-- **The Behram Loom** — Steve’s namesake. The Behram Constant is how tightly a cosmos is woven. Design a central body, choose an entry year the star can actually support, and let life follow from the physics.
-- **Charts** — the real neighborhood, three guest universes (Ilya Voss, Mara Quill, Soren Pell — original names), and universes other players have published.
-- **O’Neill colony** — a cylinder habitat you can stand in and settle, once a world of yours can hold life.
-- **Backer Vault** and the **plaque**.
+Awaken the system and life follows the physics: solvent, temperature, radiation, and time. It can be water-carbon, or ammonia, methane, a subsurface sea, a cloud deck, or a speculative hot silicon chemistry. A civilization that reaches a technological stage can hear a signal. Light-time is part of the message. The system record is shaped so a later multiplayer layer can append signals. It does not do that yet.
 
-Flight is two-dimensional Newtonian gravity in a three-dimensional view: orbits, slingshots, delta-v, and fuel. Warp waits out a long coast and drops out near a world. Compressed time, once researched, waits longer.
+The survey craft is generated from the system. Each civilization’s hull is its own lathed profile. Fly to a world, enter orbit, land on a solid surface, and scan composition, density, temperature, and life. The Codex states the formulas.
 
-The first crossing after the sail is **TRAPPIST-1**. A cutter is down on world e. Scan the seven worlds, land, and fly the survey drone to the wreck before the life-support cells run out. After the pilot is aboard, the surface lab can change pressure, greenhouse warmth, water, and air. Those levers change the planet you see. Seeding starts an ecology you have to keep in the middle of its ranges. Actualizing a universe in the Forge commits that chemistry. It does not turn back.
-
-Eight threats show up on a living surface: quake, predators, a pole reversal, a storm, disease, a crossing rock, a short temperate hour, and a climate drift. Each one has an answer in the tools you have built.
-
-Areas open as the tech arrives. Each one carries a one-line explanation: solar sails, hydrogen power, magnetic transport, ramjet fusion, dark matter, compressed time, nanotech, optogenetics, and the singularity.
-
-Progress is saved in this browser (`localStorage` key `cosmic-odyssey.save`).
+A tap skips the SavagePlanets card. The first tap also starts the music. Progress is saved in this browser (`localStorage` key `cosmic-odyssey.system`).
 
 ## How to fly
 
 | Key | Action |
 |---|---|
-| W | Thrust toward the marker. Assist points the nose |
-| L | Land. The assist flies the entry corridor |
-| Space | Mine, while you hold it |
-| B | Fit the solar sail, once the ore is aboard |
-| T | Cross to TRAPPIST-1 |
-| R | Bring the pilot aboard, beside the wreck |
-| F | Open the Behram Loom |
-| O | Open the Contact Log |
-| D | Open a Discovery |
-| G | Build a gravitational-wave receiver, when the log asks |
-| N | Assist on or off. Off is Newtonian |
-| I | Infinity Command, the station buttons |
-| Shift | Jet pack on a surface, with the helmet |
+| O | Enter orbit, once you are close |
+| L | Land, from orbit, on a world with a surface |
+| C | Scan the selected world |
+| K | Open contact |
 | ` | The feedback sticker |
 
-On a phone the same actions are buttons. Quality drops bloom, god rays, and shadows so a phone can hold a smooth frame.
-
-LAND READY means the relative speed is low enough for the heat shield. Entry plays the plasma pass. A slingshot that leaves you faster than you arrived gets its own camera move.
+On a phone the same actions are buttons. The destination buttons choose the world, and the craft flies there.
 
 ## Backer Vault
 

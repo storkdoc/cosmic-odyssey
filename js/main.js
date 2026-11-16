@@ -772,7 +772,7 @@ function fillCredits(root) {
   const sky = document.createElement('p');
   sky.textContent = 'The Milky Way photograph is ESO/S. Brunier, CC BY 4.0. Free forever. No purchases, no ads.';
   const sp = document.createElement('p');
-  sp.innerHTML = 'Presented with <a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener">Savage Planets</a>. <a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener">Read the free Savage Planets comic</a>.';
+  sp.innerHTML = 'Presented with <a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener"><span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span></a>. <a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener">Read the free SavagePlanets comic</a>.';
   root.appendChild(sp);
   root.appendChild(sky);
 }

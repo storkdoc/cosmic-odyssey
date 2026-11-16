@@ -4,7 +4,7 @@ Cosmic Odyssey is a gift from Steve Behram for the people who backed a 2017 voya
 
 The Milky Way sky is a photograph: ESO/S. Brunier, [The Milky Way panorama](https://www.eso.org/public/images/eso0932a/), CC BY 4.0. Star points in front of it are generated in the shader and do not twinkle.
 
-Presented with Savage Planets, https://savageplanets.com . The mark and wordmark are used with permission of Steve Behram. Read the free comic at that site.
+Presented with SavagePlanets, https://savageplanets.com . The name is one word: Savage in off-white (#EEEDE7) and Planets in brand red (#E03A3A). The mark and the wordmark in `assets/brand/` are used as the supplied images, at their own aspect ratio, with permission of Steve Behram. Read the free comic at that site.
 
 Free forever. No purchases, no ads.
 

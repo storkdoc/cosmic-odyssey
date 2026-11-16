@@ -415,8 +415,8 @@ export const HULLS = [
 export const FEATURED = [
   {
     id: 'savage-planets',
-    name: 'Savage Planets',
-    author: 'Savage Planets',
+    name: 'SavagePlanets',
+    author: 'SavagePlanets',
     about: 'Where Dreams and Nightmares Collide. A red-and-white gate into a darker multiverse.',
     challenge: 'Survey the dream-side world, then the night-side world. Both are real.',
     goal: { type: 'survey', planet: 'savage-dream' },
