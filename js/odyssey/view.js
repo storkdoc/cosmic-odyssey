@@ -83,14 +83,15 @@ function buildShipMesh(ship) {
   const g = new THREE.Group();
   const foil = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(ship.hull || '#d7b56a'),
-    metalness: 0.78, roughness: 0.28, clearcoat: 0.45, clearcoatRoughness: 0.3
+    metalness: 0.92, roughness: 0.16, clearcoat: 0.9, clearcoatRoughness: 0.12,
+    envMapIntensity: 1.6, emissive: new THREE.Color(ship.hull || '#d7b56a'), emissiveIntensity: 0.08
   });
   const accent = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(ship.accent || '#1c3f86'),
-    metalness: 0.5, roughness: 0.22, emissive: new THREE.Color(ship.accent || '#1c3f86'), emissiveIntensity: 0.15
+    metalness: 0.7, roughness: 0.14, clearcoat: 0.75, emissive: new THREE.Color(ship.accent || '#1c3f86'), emissiveIntensity: 0.35
   });
   const pts = (ship.profile || [0.3, 0.5, 0.55, 0.4, 0.28]).map((r, i, arr) => new THREE.Vector2(0.04 + r * 0.12, (i / (arr.length - 1) - 0.5) * 1.15));
-  const hull = new THREE.Mesh(new THREE.LatheGeometry(pts, 36), foil);
+  const hull = new THREE.Mesh(new THREE.LatheGeometry(pts, 48), foil);
   hull.rotation.z = Math.PI / 2;
   g.add(hull);
   const glass = new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 16), new THREE.MeshPhysicalMaterial({
@@ -131,7 +132,8 @@ export function createView(canvas) {
   const camera = new THREE.PerspectiveCamera(46, 1, 0.05, 2000);
   camera.position.set(0, 8, 28);
 
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 32), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide }));
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 32), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, depthWrite: false }));
+  sky.renderOrder = -3;
   scene.add(sky);
   const tex = new THREE.TextureLoader().load('assets/sky/milkyway.jpg', (t) => {
     t.colorSpace = THREE.SRGBColorSpace;
@@ -146,6 +148,100 @@ export function createView(canvas) {
   });
   tex.colorSpace = THREE.SRGBColorSpace;
 
+  const starfield = new THREE.TextureLoader().load('assets/art/starfield.jpg');
+  starfield.colorSpace = THREE.SRGBColorSpace;
+  starfield.anisotropy = 8;
+  const nebula = new THREE.Mesh(new THREE.PlaneGeometry(36, 20.25), new THREE.MeshBasicMaterial({
+    map: starfield, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false
+  }));
+  nebula.position.set(0, 0.4, -16);
+  nebula.renderOrder = -2;
+  camera.add(nebula);
+  scene.add(camera);
+
+  const twinkleCount = 280;
+  const twinkleGeo = new THREE.BufferGeometry();
+  const twPos = new Float32Array(twinkleCount * 3);
+  const twPhase = new Float32Array(twinkleCount);
+  const twCol = new Float32Array(twinkleCount * 3);
+  const hues = [[1, 0.95, 0.85], [0.7, 0.82, 1], [1, 0.7, 0.55], [0.75, 1, 0.9]];
+  for (let i = 0; i < twinkleCount; i++) {
+    const z = Math.random() * 2 - 1;
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.max(0, 1 - z * z)) * 180;
+    twPos[i * 3] = Math.cos(a) * r;
+    twPos[i * 3 + 1] = z * 180;
+    twPos[i * 3 + 2] = Math.sin(a) * r;
+    twPhase[i] = Math.random() * Math.PI * 2;
+    const h = hues[i % hues.length];
+    twCol[i * 3] = h[0]; twCol[i * 3 + 1] = h[1]; twCol[i * 3 + 2] = h[2];
+  }
+  twinkleGeo.setAttribute('position', new THREE.BufferAttribute(twPos, 3));
+  twinkleGeo.setAttribute('aPhase', new THREE.BufferAttribute(twPhase, 1));
+  twinkleGeo.setAttribute('color', new THREE.BufferAttribute(twCol, 3));
+  const twinkles = new THREE.Points(twinkleGeo, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      attribute float aPhase; attribute vec3 color; varying float vA; varying vec3 vC;
+      uniform float uTime;
+      void main(){
+        vA = 0.35 + 0.65 * (0.5 + 0.5 * sin(uTime * 2.2 + aPhase));
+        vC = color;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = 2.2 * (120.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      varying float vA; varying vec3 vC;
+      void main(){
+        vec2 p = gl_PointCoord - 0.5;
+        float d = dot(p, p);
+        if (d > 0.25) discard;
+        float core = smoothstep(0.25, 0.0, d);
+        gl_FragColor = vec4(vC * core, core * vA);
+      }`
+  }));
+  scene.add(twinkles);
+
+  const SHIP_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }';
+  const SHIP_FRAG = `
+    uniform sampler2D map; uniform float uPulse; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(map, vUv);
+      if (c.a < 0.04) discard;
+      float engine = smoothstep(0.02, 0.45, c.b - max(c.r, c.g));
+      vec3 col = c.rgb + vec3(0.22, 0.62, 1.0) * engine * (0.25 + 0.85 * uPulse);
+      gl_FragColor = vec4(col, c.a);
+    }`;
+  function shipPlate(url) {
+    const map = new THREE.TextureLoader().load(url);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = 8;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2.05, 1.153), new THREE.ShaderMaterial({
+      uniforms: { map: { value: map }, uPulse: { value: 0.4 } },
+      vertexShader: SHIP_VERT,
+      fragmentShader: SHIP_FRAG,
+      transparent: true,
+      depthWrite: false
+    }));
+    mesh.renderOrder = 2;
+    return mesh;
+  }
+  const playerArt = new THREE.Group();
+  const heroPlate = shipPlate('assets/art/ship-hero.png');
+  const sidePlate = shipPlate('assets/art/ship-side.png');
+  sidePlate.visible = false;
+  playerArt.add(heroPlate, sidePlate);
+  const heroShow = new THREE.Group();
+  const titlePlate = shipPlate('assets/art/ship-hero.png');
+  const cutPlate = shipPlate('assets/art/ship-side.png');
+  cutPlate.visible = false;
+  titlePlate.scale.setScalar(3.8);
+  cutPlate.scale.setScalar(3.2);
+  heroShow.add(titlePlate, cutPlate);
+  scene.add(heroShow);
+
   scene.add(new THREE.AmbientLight(0xc5ced6, 0.45));
   const key = new THREE.DirectionalLight(0xfff4e8, 2.4);
   key.position.set(30, 18, 12);
@@ -154,6 +250,7 @@ export function createView(canvas) {
   const root = new THREE.Group();
   scene.add(root);
   const shipRoot = new THREE.Group();
+  shipRoot.add(playerArt);
   scene.add(shipRoot);
   let shipMesh = null;
 
@@ -321,42 +418,80 @@ export function createView(canvas) {
   }
 
   function dressShip(ship) {
-    const key = ship && ship.id;
+    const key = ship && (ship.rendered ? 'rendered-player' : ship.id);
     if (shipRoot.userData.key === key) return;
     shipRoot.userData.key = key;
     if (shipMesh) shipRoot.remove(shipMesh);
-    shipMesh = ship ? buildShipMesh(ship) : null;
+    playerArt.visible = !!(ship && ship.rendered);
+    shipMesh = ship && !ship.rendered ? buildShipMesh(ship) : null;
     if (shipMesh) shipRoot.add(shipMesh);
+  }
+
+  function pulsePlates(group, pulse) {
+    group.children.forEach((child) => {
+      if (child.material && child.material.uniforms && child.material.uniforms.uPulse) child.material.uniforms.uPulse.value = pulse;
+    });
   }
 
   function frame(state, dt) {
     clock.t += dt;
     focus += dt * 0.05;
+    const phase = state.phase || 'build';
     const flight = state.flight;
+    const pulse = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(clock.t * 7.5));
+    pulsePlates(playerArt, pulse);
+    pulsePlates(heroShow, pulse);
+    twinkles.material.uniforms.uTime.value = clock.t;
+    nebula.position.x = Math.sin(clock.t * 0.07) * 1.15;
+    nebula.position.y = 0.35 + Math.cos(clock.t * 0.05) * 0.35;
+    heroShow.visible = phase === 'title' || phase === 'evolve';
+    titlePlate.visible = phase === 'title';
+    cutPlate.visible = phase === 'evolve';
+    heroPlate.visible = !(flight && flight.mode === 'landed');
+    sidePlate.visible = !!(flight && flight.mode === 'landed');
+    root.visible = phase !== 'title';
     terrain.visible = flight && flight.mode === 'landed';
-    shipRoot.visible = !!(flight && flight.mode !== 'atelier');
-    if (flight && flight.mode === 'landed') {
+    shipRoot.visible = !!(flight && flight.mode !== 'atelier' && phase === 'flight');
+    gate.visible = phase === 'build';
+    if (phase === 'title') {
+      heroShow.position.set(0.3 + Math.sin(clock.t * 0.28) * 0.85, -2.55 + Math.sin(clock.t * 0.9) * 0.1, 0);
+      camera.position.lerp(new THREE.Vector3(0.2, 0.2, 8.2), 0.05);
+      camera.lookAt(0.2, -1.15, 0);
+      titlePlate.lookAt(camera.position);
+    } else if (phase === 'evolve') {
+      heroShow.position.set(0.4, 0.2 + Math.sin(clock.t * 0.7) * 0.08, 0);
+      camera.position.lerp(new THREE.Vector3(0.2, 1.1, 8.4), 0.06);
+      camera.lookAt(0.4, 0.15, 0);
+      cutPlate.lookAt(camera.position);
+    } else if (flight && flight.mode === 'landed') {
       const cols = planetColors((flight.body && flight.body.composition) || 'rocky');
       terrain.material.uniforms.uA.value.copy(cols[0]);
       terrain.material.uniforms.uB.value.copy(cols[1]);
       terrain.material.uniforms.uSeed.value = (flight.body && flight.body.aAU) || 1;
-      shipRoot.position.set(0, 1.15, 0);
-      shipRoot.rotation.y = clock.t * 0.05;
-      camera.position.lerp(new THREE.Vector3(-3.2, 1.8, 4.2), 0.08);
-      camera.lookAt(0, 0.8, 0);
-      gate.visible = false;
-    } else if (flight && flight.mode !== 'atelier') {
-      gate.visible = false;
+      shipRoot.position.set(0, 1.35 + Math.sin(clock.t * 1.4) * 0.04, 0);
+      shipRoot.rotation.set(0, 0, 0);
+      sidePlate.lookAt(camera.position);
+      camera.position.lerp(new THREE.Vector3(-3.4, 1.7, 4.4), 0.08);
+      camera.lookAt(0, 0.9, 0);
+    } else if (flight && flight.mode !== 'atelier' && phase === 'flight') {
       const ship = flight.pose;
-      shipRoot.position.set(ship.x, 0, ship.z);
-      shipRoot.rotation.y = -ship.heading;
-      if (shipMesh && shipMesh.userData.plume) shipMesh.userData.plume.material.opacity = Math.min(0.9, ship.thrust || 0);
-      const back = flight.mode === 'orbit' ? 3.4 : 2.5;
+      const bob = Math.sin(clock.t * 1.5) * 0.05;
+      shipRoot.position.set(ship.x, bob, ship.z);
+      const prev = shipRoot.userData.prevHeading || ship.heading;
+      let delta = ship.heading - prev;
+      if (delta > Math.PI) delta -= Math.PI * 2;
+      if (delta < -Math.PI) delta += Math.PI * 2;
+      shipRoot.userData.prevHeading = ship.heading;
+      const bank = Math.max(-0.28, Math.min(0.28, -delta * 6));
+      const back = flight.mode === 'orbit' ? 3.6 : 2.7;
       const hx = Math.cos(ship.heading);
       const hz = Math.sin(ship.heading);
-      const want = new THREE.Vector3(ship.x - hx * back, 1.15, ship.z - hz * back);
+      const want = new THREE.Vector3(ship.x - hx * back, 1.05, ship.z - hz * back);
       camera.position.lerp(want, 0.08);
-      camera.lookAt(ship.x + hx * 0.4, 0.2, ship.z + hz * 0.4);
+      camera.lookAt(ship.x + hx * 0.5, 0.15, ship.z + hz * 0.5);
+      heroPlate.lookAt(camera.position);
+      heroPlate.rotateZ(bank);
+      if (shipMesh && shipMesh.userData.plume) shipMesh.userData.plume.material.opacity = Math.min(0.9, ship.thrust || 0);
     } else {
       const span = 18 + Math.sin(clock.t * 0.1) * 2;
       camera.position.lerp(new THREE.Vector3(Math.cos(clock.t * 0.07) * span, 7 + Math.sin(clock.t * 0.13) * 0.6, Math.sin(clock.t * 0.07) * span), 0.04);

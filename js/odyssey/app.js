@@ -491,9 +491,9 @@ function loop(now) {
       const dist = Math.hypot(flight.pose.x - body.x, flight.pose.z - body.z);
       $('flight-readout').textContent = sys.playerShip.name + ' · ' + body.name + ' · ' + dist.toFixed(1) + (flight.mode === 'orbit' ? ' · in orbit' : ' · closing');
     }
-    view.frame({ flight: { ...flight, body: flight.body || body } }, dt);
+    view.frame({ phase, flight: { ...flight, body: flight.body || body } }, dt);
   } else {
-    view.frame({ flight: { mode: 'atelier' } }, dt);
+    view.frame({ phase, flight: { mode: 'atelier' } }, dt);
   }
   audio.tick();
   requestAnimationFrame(loop);

@@ -47,7 +47,7 @@ img.brand.mark { width: 56px; height: 56px; aspect-ratio: 1 / 1; }
 #present:not(.show) { display: none; }
 #present p { letter-spacing: 0.42em; text-transform: uppercase; color: #EEEDE7; margin: 0.8rem 0 0; font-size: 0.78rem; }
 #title { display: none; flex-direction: column; text-align: center; background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0.15)); }
-#title:not([hidden]) { display: flex; }
+#title:not([hidden]) { display: flex; justify-content: flex-start; padding-top: 8vh; }
 #title[hidden], #atelier[hidden], #evolve[hidden], #flight-hud[hidden], #scan[hidden], #contact[hidden], #codex[hidden] { display: none !important; }
 #title h1 { font-weight: 500; letter-spacing: 0.28em; font-size: clamp(1.6rem, 4vw, 3rem); margin: 0; }
 .by, .ded, .free, .presented { margin: 0.4rem 0; }
@@ -83,6 +83,8 @@ label.slider input { grid-column: 1 / -1; width: 100%; }
 a { color: #EEEDE7; }
 
 #flight-hud { position: fixed; inset: auto 0 0 0; z-index: 5; padding: 0.6rem 0.8rem 1rem; display: grid; gap: 0.4rem; background: linear-gradient(to top, rgba(0,0,0,0.72), transparent); }
+#ship-card { margin: 0; justify-self: start; }
+#ship-card img { width: min(280px, 46vw); height: auto; aspect-ratio: 16 / 9; object-fit: contain; background: transparent; display: block; }
 #flight-readout { font-size: 1rem; }
 #ship-blurb { margin: 0; color: var(--dim); font-size: 0.82rem; }
 .targets, .pad, .codex-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }

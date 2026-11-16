@@ -80,6 +80,10 @@ async function voyage(page) {
   });
   await click('#launch');
   await page.waitForSelector('#flight-hud:not([hidden])');
+  await page.waitForFunction(() => {
+    const img = document.querySelector('#ship-card img');
+    return img && img.complete && img.naturalWidth === 1280 && img.naturalHeight === 720;
+  });
   await page.waitForFunction(() => /in orbit/.test(document.getElementById('flight-readout').textContent), null, { timeout: 20000 });
   await click('#act-land');
   await click('#act-scan');

@@ -353,6 +353,7 @@ export function evolve(sys, ageYears = sys.ageYears) {
     ship: designShip(next.seed + ':' + p.id, p.life, describePlanet(next, p).g)
   }));
   next.playerShip = designShip(next.seed + ':survey', { form: 'survey', stage: 'technological' }, 9.8);
+  next.playerShip.rendered = true;
   return next;
 }
 
