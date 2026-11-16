@@ -32,17 +32,27 @@ canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .letter.bot { bottom: 0; }
 body.letterbox .letter { height: 10vh; }
 
-img.brand { display: block; object-fit: contain; object-position: center; background: transparent; }
-img.brand.wordmark { width: min(440px, 82vw); height: auto; aspect-ratio: 588 / 420; }
-img.brand.mark { width: 56px; height: 56px; aspect-ratio: 1 / 1; }
+img.brand { display: block; object-fit: contain; object-position: center; background: transparent; max-width: 100%; }
+img.brand.wordmark {
+  width: auto; height: auto;
+  max-width: min(520px, 88vw);
+  max-height: calc(100vh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  aspect-ratio: 588 / 420;
+  object-fit: contain;
+}
+img.brand.mark { width: 56px; height: 56px; aspect-ratio: 1 / 1; object-fit: contain; }
 .sp-word { color: #EEEDE7; font-weight: 600; letter-spacing: 0.02em; }
 .sp-word > span { color: #E03A3A; }
 
-#sp-mark { position: fixed; z-index: 8; top: 0.7rem; left: 0.7rem; width: 56px; height: 56px; }
+#sp-mark { position: fixed; z-index: 8; }
 #present, #title, #atelier, #evolve, #scan, #contact, #codex {
   position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center;
 }
-#present { flex-direction: column; background: #000; text-align: center; }
+#present {
+  flex-direction: column; background: #000; text-align: center; overflow: visible;
+  padding: max(1.2rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px)) max(1.4rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+}
+#sp-mark { overflow: visible; height: auto; width: auto; top: max(0.7rem, env(safe-area-inset-top, 0px)); left: max(0.7rem, env(safe-area-inset-left, 0px)); }
 #present.show { display: flex; }
 #present:not(.show) { display: none; }
 #present p { letter-spacing: 0.42em; text-transform: uppercase; color: #EEEDE7; margin: 0.8rem 0 0; font-size: 0.78rem; }

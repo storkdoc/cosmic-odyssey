@@ -479,6 +479,7 @@ $('lift').addEventListener('click', () => {
   document.body.classList.remove('letterbox');
 });
 document.querySelectorAll('[data-codex]').forEach((b) => b.addEventListener('click', () => openCodex(b.getAttribute('data-codex'))));
+addEventListener('odyssey:whoosh', () => { if (audio.sfx && audio.sfx.whoosh) audio.sfx.whoosh(); });
 
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000 || 0.016);

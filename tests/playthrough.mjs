@@ -34,7 +34,11 @@ async function assertBrand(page) {
   if (nat.w !== 588 || nat.h !== 420) throw new Error('wordmark intrinsic ' + nat.w + 'x' + nat.h);
   if (nat.alt !== 'SavagePlanets') throw new Error('wordmark alt ' + nat.alt);
   const box = await logo.boundingBox();
+  const vp = page.viewportSize();
   if (!box || box.width < 40) throw new Error('wordmark not on screen');
+  if (box.x < -1 || box.y < -1 || box.x + box.width > vp.width + 1 || box.y + box.height > vp.height + 1) {
+    throw new Error('logo clipped by the viewport ' + JSON.stringify({ box, vp }));
+  }
   const ratio = box.width / box.height;
   if (Math.abs(ratio - (588 / 420)) > 0.05) throw new Error('wordmark stretched ' + ratio.toFixed(3));
   const mark = page.locator('#sp-mark img.brand.mark');
@@ -51,7 +55,7 @@ async function assertBrand(page) {
   if (!html.includes('SavagePlanets')) throw new Error('brand name missing');
 }
 
-async function voyage(page) {
+async function voyage(page, name) {
   const click = async (sel) => page.click(sel, { timeout: 15000 });
   await page.waitForSelector('#present.show');
   await assertBrand(page);
@@ -59,6 +63,11 @@ async function voyage(page) {
   await page.waitForSelector('#title:not([hidden])');
   await click('#begin');
   await page.waitForSelector('#atelier:not([hidden])');
+  await page.waitForFunction(() => window.__sky && window.__sky.w >= 4096 && window.__sky.dpr >= 2, null, { timeout: 20000 });
+  const sky = await page.evaluate(() => window.__sky);
+  if (name === 'desktop' && sky.w < 8000) throw new Error('desktop sky is ' + sky.w + ' px wide');
+  if (name !== 'desktop' && sky.w !== 4096) throw new Error('phone sky is ' + sky.w + ' px wide');
+  if (sky.dpr < 2) throw new Error('pixel ratio ' + sky.dpr);
   const gate = await page.locator('#gate-mark').boundingBox();
   if (!gate || Math.abs(gate.width - gate.height) > 1.5) throw new Error('gate mark not square');
   await page.waitForSelector('#hz-readout');
@@ -110,8 +119,9 @@ const browser = await chromium.launch({
 let failed = 0;
 try {
   for (const [name, contextOptions] of [
-    ['desktop', { viewport: { width: 1440, height: 900 } }],
-    ['iphone', { ...devices['iPhone 13'], hasTouch: true }]
+    ['desktop', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }],
+    ['iphone', { ...devices['iPhone 13'], hasTouch: true, deviceScaleFactor: 3 }],
+    ['iphone-land', { ...devices['iPhone 13 landscape'], hasTouch: true, deviceScaleFactor: 3 }]
   ]) {
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
@@ -120,7 +130,7 @@ try {
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
     try {
-      await voyage(page);
+      await voyage(page, name);
       const real = errors.filter((e) => !/favicon|ReadPixels|GL Driver|AudioContext/i.test(e));
       console.log(name, real.length ? 'FAIL' : 'PASS', real.slice(0, 3).join(' | '));
       if (real.length) failed++;

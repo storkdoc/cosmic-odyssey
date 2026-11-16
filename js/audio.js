@@ -148,7 +148,19 @@ export function createAudio(rand = Math.random) {
           mine: () => blip(140, 0.04, 'square', 0.012),
           land: () => blip(220, 0.18, 'sine', 0.03),
           ping: () => blip(660, 0.08, 'sine', 0.03),
-          rescue: () => blip(440, 0.22, 'triangle', 0.04)
+          rescue: () => blip(440, 0.22, 'triangle', 0.04),
+          whoosh: () => {
+            const t = ctx.currentTime;
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'sawtooth';
+            o.frequency.setValueAtTime(220, t);
+            o.frequency.exponentialRampToValueAtTime(48, t + 0.42);
+            g.gain.setValueAtTime(0.018, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(t); o.stop(t + 0.48);
+          }
         };
       }
     } catch (e) { /* effects stay silent if the context is blocked */ }
