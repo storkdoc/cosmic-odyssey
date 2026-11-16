@@ -5,6 +5,11 @@ import { SYSTEMS, FEATURED, SKINS, HULLS, PERKS } from './data.js';
 import { publishUniverse, publishShip, listUniverses, listShips, sanitizeUniverse } from './share.js';
 import { escapeHtml } from './text.js';
 import { climate } from './sim.js';
+import { pinsUpTo, overlap, zoomFactor, entryVerdict, inFlightSignals } from './engine/timeline.js';
+import { codexById } from './codex.js';
+import { appendEvent } from './galaxy.js';
+import { CENTERS, emerge } from './weave.js';
+import { CONTACT_SEED, viewLog } from './contact.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -80,12 +85,14 @@ $('begin').addEventListener('click', () => {
 
 function enterFlight() {
   if (phase === 'play') return;
-  phase = 'play';
   $('present').classList.remove('show');
   $('title').style.visibility = '';
   document.body.classList.remove('cinema', 'flying');
   document.body.classList.add('play', 'past-title');
   if (!sim) sim = createGame();
+  if (!sim.g.woven) { showDesign(); return; }
+  phase = 'play';
+  $('design').hidden = true;
   if (window.MoodSticker) {
     MoodSticker.game('cosmic-odyssey');
     MoodSticker.screen('flight');
@@ -157,6 +164,13 @@ $('act-land').addEventListener('click', () => { if (sim) toast(sim.tryLand()); }
 $('act-sail').addEventListener('click', () => { if (sim) toast(sim.fitSail()); });
 $('act-cross').addEventListener('click', () => { if (sim) toast(sim.crossTrappist()); });
 $('act-forge').addEventListener('click', () => { if (phase === 'play') openPanel('forge'); });
+$('act-colony').addEventListener('click', () => { if (sim) afterStrategic(sim.foundColony()); });
+$('act-habitat').addEventListener('click', () => { if (sim) afterStrategic(sim.buildHabitat()); });
+$('act-codex').addEventListener('click', () => showCodex());
+$('act-visit').addEventListener('click', () => { if (sim) afterStrategic(sim.visitNeighbor()); });
+$('act-joint').addEventListener('click', () => { if (sim) afterStrategic(sim.contribute()); });
+$('act-log').addEventListener('click', () => openLog());
+$('codex-close').addEventListener('click', () => { $('codex-card').hidden = true; });
 
 function openHow(blocking) {
   $('howto').classList.add('show');
@@ -830,6 +844,164 @@ function costLine(cost) {
   return bits.join(' · ');
 }
 
+let pickedCenter = null;
+function showDesign() {
+  phase = 'design';
+  $('design').hidden = false;
+  const host = $('centers');
+  if (!host.childElementCount) {
+    CENTERS.forEach((c) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.id = 'center-' + c.id;
+      b.textContent = c.name;
+      b.addEventListener('click', () => {
+        pickedCenter = c;
+        $('cosmic-clock').textContent = c.clock;
+        $('center-lesson').textContent = c.lesson;
+        $('life-guide').textContent = '';
+        $('launch-system').disabled = true;
+        syncEntry(c);
+      });
+      host.appendChild(b);
+    });
+  }
+}
+$('place-world').addEventListener('click', () => {
+  if (!pickedCenter) { $('center-lesson').textContent = 'Choose a central body first.'; return; }
+  const life = emerge(pickedCenter);
+  $('life-guide').textContent = life.form + '. ' + life.society + '. ' + life.guide;
+  $('launch-system').disabled = false;
+});
+function specOf(center) {
+  return {
+    seed: center.id,
+    design: center.id,
+    formedAt: 0,
+    lifetime: center.years,
+    hazard: center.hazard,
+    techAfter: Math.min(center.years * 0.4, 2e8),
+    log: []
+  };
+}
+function paintEntry(center) {
+  const slider = $('entry-year');
+  if (!slider || !center) return;
+  const t = Number(slider.value);
+  const verdict = entryVerdict(specOf(center), t);
+  $('entry-readout').textContent = verdict.ok
+    ? 'Year ' + Math.round(t).toLocaleString('en-US') + ' on the ruler. Life here is ' + verdict.stage + '. The star has to exist, and life cannot be further along than this.'
+    : verdict.reason;
+}
+function syncEntry(center) {
+  const slider = $('entry-year');
+  if (!slider) return;
+  slider.min = '0';
+  slider.max = String(center.years);
+  slider.step = String(Math.max(1, Math.round(center.years / 200)));
+  slider.value = String(Math.min(center.years * 0.2, 1e7));
+  paintEntry(center);
+}
+$('entry-year').addEventListener('input', () => { if (pickedCenter) paintEntry(pickedCenter); });
+$('launch-system').addEventListener('click', () => {
+  if (!pickedCenter || !sim) return;
+  sim.g.broadcast = !$('dark-forest').checked;
+  const placed = sim.applyWeave(pickedCenter.id, Number($('entry-year').value));
+  if (!placed.ok) return;
+  $('design').hidden = true;
+  phase = 'play';
+  renderDock();
+});
+function renderLog() {
+  const epoch = sim.g.window ? sim.g.window.start : 0;
+  const cursor = sim.g.window ? sim.g.window.cursor : sim.g.year;
+  const view = viewLog(CONTACT_SEED, sim.g.comms, cursor, epoch);
+  $('log-count').textContent = view.visible.length + ' exchanges have reached you. ' + view.pending + ' more are still on the way. There is something out there.';
+  $('log-list').innerHTML = view.visible.map((row) => '<p data-level="' + row.level + '">' + escapeHtml(row.text) + '</p>').join('');
+  const full = view.visible.find((row) => row.level === 'd' && row.flyby);
+  $('flyby-card').textContent = full && sim.g.contactFlyby ? full.flyby : '';
+}
+function openLog() {
+  if (!sim) return;
+  sim.markLogOpened();
+  $('log-panel').hidden = false;
+  renderLog();
+}
+$('research-gw').addEventListener('click', () => {
+  if (!sim) return;
+  toast(sim.researchComm('gw'));
+  renderLog();
+});
+$('flyby-seed').addEventListener('click', () => {
+  if (!sim) return;
+  const res = sim.seeFlyby();
+  toast(res);
+  renderLog();
+});
+$('log-close').addEventListener('click', () => { $('log-panel').hidden = true; });
+function renderRuler() {
+  const mine = (sim && sim.g.window) || { systemId: 'you', start: 1e7, cursor: 1e7 + 120, end: 1e7 + 120 };
+  const them = { systemId: 'stillwater', start: Math.max(0, mine.start - 2e6), cursor: mine.start + 80, end: mine.start + 80 };
+  const ov = overlap(mine, them);
+  const epoch = mine.start;
+  const flight = [
+    { id: 'cx-gw-behram', t: epoch + 30, distanceLy: 42, v: 1 },
+    { id: 'cx-radio-late', t: epoch + 90, distanceLy: 80, v: 1 }
+  ];
+  const cones = flight.map((emission) => inFlightSignals([emission], mine.cursor)[0]).filter(Boolean);
+  const lo = Math.min(mine.start, them.start, ...flight.map((e) => e.t));
+  const hi = Math.max(mine.end, them.end, mine.cursor, ...flight.map((e) => e.t + e.distanceLy)) + 1;
+  const span = Math.max(1, hi - lo);
+  const pct = (t) => ((t - lo) / span) * 100;
+  const bar = (cls, a, b) => `<i class="bar ${cls}" style="left:${pct(a)}%;width:${Math.max(1.2, pct(b) - pct(a))}%"></i>`;
+  const pins = pinsUpTo(mine.cursor).slice(-3).map((ev) => `<i class="pin" style="left:${pct(Math.min(hi, Math.max(lo, ev.t)))}%" title="${ev.kind}"></i>`).join('');
+  const wedges = cones.map((row) => `<i class="wedge" style="left:${pct(row.cone.tEmit)}%;width:${Math.max(1.2, pct(row.cone.tArrive) - pct(row.cone.tEmit))}%"></i>`).join('');
+  const marks = `<i class="mark you" style="left:${pct(mine.cursor)}%"></i><i class="mark them" style="left:${pct(them.cursor)}%"></i>`;
+  $('ruler-track').innerHTML = bar('you', mine.start, mine.end) + bar('them', them.start, them.end) + (ov ? bar('over', ov.start, ov.end) : '') + wedges + marks + pins;
+  $('ruler-note').textContent = 'Orange is your window. The pale bar is Stillwater. The overlap is where a reply can land. Marks are cursors. A wedge is a signal still in flight. Pins are galaxy events fixed by the seed. The ruler does not follow the wall clock, and there is no universal now across light-years. Zoom lens ' + Math.round(zoomFactor(1e9)).toLocaleString('en-US') + '×.';
+  $('ruler').hidden = false;
+}
+$('open-ruler').addEventListener('click', () => { if (sim || true) renderRuler(); });
+$('ruler-close').addEventListener('click', () => { $('ruler').hidden = true; });
+function showCodex() {
+  if (!sim) return;
+  const id = sim.g.codexUnread || 'rocket';
+  const entry = codexById(id);
+  $('codex-title').textContent = entry.title;
+  $('codex-principle').textContent = entry.principle;
+  $('codex-note').textContent = entry.note;
+  $('codex-card').hidden = false;
+  sim.g.codexUnread = null;
+  sim.g.codexSeen[id] = true;
+}
+
+function playerSid() {
+  try {
+    let id = localStorage.getItem('cosmic-odyssey.pid');
+    if (!id) { id = 'p-' + Math.random().toString(16).slice(2, 10); localStorage.setItem('cosmic-odyssey.pid', id); }
+    return id;
+  } catch (err) { return 'local'; }
+}
+
+function afterStrategic(res) {
+  toast(res);
+  if (!res || !res.ok || !res.event) return;
+  usage(res.event, sim.g.landed || res.event);
+  const base = {
+    id: res.event + '-' + playerSid() + '-' + Date.now().toString(16),
+    kind: res.event === 'colony_founded' ? 'colony' : res.event === 'colony_visit' ? 'visit' : res.event === 'gift' ? 'gift' : 'project',
+    by: sim.g.author || 'Explorer',
+    sid: playerSid(),
+    systemId: sim.g.systemId,
+    planetId: sim.g.landed || '',
+    name: 'First Light',
+    projectId: 'long-relay',
+    amount: res.event === 'joint_project' ? 4 : 0,
+    pop: 40
+  };
+  appendEvent(base).catch(() => {});
+}
+
 function usage(name, detail) {
   if (window.MoodSticker && MoodSticker.usage) MoodSticker.usage(name, detail);
 }
@@ -852,12 +1024,26 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey) openPanel('forge');
   if (e.code === 'KeyN') { sim.g.assist = !sim.g.assist; sim.say(sim.g.assist ? 'Assist is flying with you.' : 'Newtonian. You fly the burns yourself.'); }
   if (e.code === 'KeyI') { sim.say('Infinity Command. The row of buttons is the station.'); }
-  if (e.code === 'KeyG') toast(sim.scan());
+  if (e.code === 'KeyG') {
+    if (sim.prompt().id === 'gw') toast(sim.researchComm('gw'));
+    else toast(sim.scan());
+  }
+  if (e.code === 'KeyO') openLog();
+  if (e.code === 'KeyK') toast(sim.seeFlyby());
   if (e.code === 'Tab') { e.preventDefault(); sim.cycleTarget(e.shiftKey ? -1 : 1); }
   if (e.code === 'KeyX') sim.pointAlong(-1);
-  if (e.code === 'KeyC') sim.pointAlong(1);
+  if (e.code === 'KeyC') {
+    if (sim.prompt().id === 'colony') afterStrategic(sim.foundColony());
+    else sim.pointAlong(1);
+  }
+  if (e.code === 'KeyH') afterStrategic(sim.buildHabitat());
+  if (e.code === 'KeyD') showCodex();
+  if (e.code === 'KeyJ') afterStrategic(sim.contribute());
   if (e.code === 'KeyM') sim.g.matching = true;
-  if (e.code === 'KeyV') sim.cycleWarp();
+  if (e.code === 'KeyV') {
+    if (sim.prompt().id === 'visit') afterStrategic(sim.visitNeighbor());
+    else sim.cycleWarp();
+  }
   if (e.code === 'Space') e.preventDefault();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -958,7 +1144,8 @@ function readout() {
   const badge = g.backer ? 'VIP BETA' : '';
   $('readout').innerHTML = `
     <b>${escapeHtml(sim.sys().name)}</b>
-    <span>fuel ${g.ship.fuel.toFixed(2)} · Δv ${sim.deltaV().toFixed(2)} · warp ${g.warp}</span>
+    <span>Ruler ${g.window ? Math.round(g.window.cursor).toLocaleString('en-US') + ' y' : 'not placed'} · lens ${Math.round(zoomFactor(1e9)).toLocaleString('en-US')}× · fuel ${g.ship.fuel.toFixed(2)}</span>
+    <span>${g.central ? escapeHtml(g.central.clock) : ''} ${g.broadcast ? '· broadcasting' : '· silent'}</span>
     <span>${escapeHtml(alt)}</span>
     <span>${target ? escapeHtml(target.name + ' · ' + (target.aAU ? target.aAU.toFixed(3) + ' AU' : '') + (target.period ? ' · ' + target.period.toFixed(2) + ' d' : '') + ' · ' + Math.round(sim.climateFor(target.id).Teq) + ' K eq') : ''}</span>
     <span>${escapeHtml([lamp, clock, badge, 'coins ' + Math.floor(g.coins)].filter(Boolean).join(' · '))}</span>`;
@@ -1016,6 +1203,7 @@ function loop(now) {
     if (fly >= 1) enterFlight();
   }
   if (sim && phase === 'play') {
+    try {
     applyInput(dt);
     sim.step(dt);
     sim.g.lineT = sim.g.lineT;
@@ -1040,7 +1228,7 @@ function loop(now) {
     const pr = sim.prompt();
     $('prompt').textContent = pr.text;
     document.querySelectorAll('#actions button').forEach((b) => b.classList.remove('now'));
-    const act = { thrust: 'act-thrust', land: 'act-land', entry: 'act-land', mine: 'act-mine', sail: 'act-sail', cross: 'act-cross', coast: 'act-cross', drone: 'act-thrust', grab: 'act-rescue', forge: 'act-forge' }[pr.id];
+    const act = { thrust: 'act-thrust', land: 'act-land', entry: 'act-land', mine: 'act-mine', sail: 'act-sail', cross: 'act-cross', coast: 'act-cross', drone: 'act-thrust', grab: 'act-rescue', forge: 'act-forge', colony: 'act-colony', habitat: 'act-habitat', codex: 'act-codex', visit: 'act-visit', joint: 'act-joint', log: 'act-log', gw: 'act-log', flyby: 'act-log' }[pr.id];
     if (act && $(act)) $(act).classList.add('now');
     const iron = Math.min(1, (sim.g.ship.cargo.iron || 0) / 3);
     const ice = Math.min(1, (sim.g.ship.cargo.ice || 0) / 3);
@@ -1053,6 +1241,7 @@ function loop(now) {
     const dockKey = (sim.g.docked ? 'd' : '') + (sim.g.landed ? 'l' : '') + (place || '') + (sim.g.surface && sim.g.surface.kind || '');
     if (dockKey !== loop.dockKey) { loop.dockKey = dockKey; renderDock(); }
     if (now - saveAt > 8000) { saveAt = now; sim.save(); }
+    } catch (err) { /* one bad frame does not stop the ruler */ }
   }
   audio.tick();
   if (view) {

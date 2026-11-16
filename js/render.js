@@ -307,7 +307,13 @@ function buildShip(design, sailOn) {
   const solar = new THREE.MeshStandardMaterial({
     color: 0x1c3f86, metalness: 0.35, roughness: 0.22, emissive: 0x061226, emissiveIntensity: 0.4
   });
-  const bus = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.028, 0.032), foil);
+  const hullPts = [];
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    hullPts.push(new THREE.Vector2(0.008 + Math.sin(t * Math.PI) * 0.012, (t - 0.5) * 0.11));
+  }
+  const bus = new THREE.Mesh(new THREE.LatheGeometry(hullPts, 28), foil);
+  bus.rotation.z = Math.PI / 2;
   bus.castShadow = true;
   g.add(bus);
   const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.03, 8), white);
@@ -315,14 +321,17 @@ function buildShip(design, sailOn) {
   nose.position.x = 0.04;
   g.add(nose);
   for (let i = -1; i <= 1; i += 2) {
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.003, 0.003), truss);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.0016, 0.0016, 0.09, 8), truss);
+    beam.rotation.z = Math.PI / 2;
     beam.position.set(-0.01, i * 0.012, 0);
     g.add(beam);
   }
-  const rad = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.002, 0.05), white);
+  const rad = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.004, 16), white);
+  rad.rotation.x = Math.PI / 2;
   rad.position.set(-0.01, 0.02, 0);
   g.add(rad);
-  const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.0012, 0.07), solar);
+  const wingL = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.0012, 20), solar);
+  wingL.rotation.x = Math.PI / 2;
   wingL.position.set(0.005, 0, 0.055);
   const wingR = wingL.clone();
   wingR.position.z = -0.055;
@@ -341,7 +350,7 @@ function buildShip(design, sailOn) {
   const plumeMat = new THREE.MeshBasicMaterial({
     color: 0xffb15a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
   });
-  const plume = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.07, 10), plumeMat);
+  const plume = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.07, 24), plumeMat);
   plume.rotation.z = Math.PI / 2;
   plume.position.x = -0.08;
   g.add(plume);

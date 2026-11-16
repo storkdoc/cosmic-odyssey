@@ -3,6 +3,8 @@
 import {
   SYSTEMS, getSystem, DRIVES, TECH, TIPS, beaconStrength, NAMES, THREATS, FEATURED
 } from './data.js';
+import { CENTERS, emerge } from './weave.js';
+import { openWindow, advanceCursor, setDirectives, entryVerdict, resumeSnapshot } from './engine/timeline.js';
 import {
   AU, starGM, planetRadius, kepler, meanMotion, stepShip, shipMass,
   approach, climate, lookFromClimate, deltaV, planetGM
@@ -34,6 +36,23 @@ function fresh() {
     thrusting: false,
     turnRate: 0,
     shared: false,
+    stores: { energy: 48, volatiles: 24, metals: 16, biomass: 6, science: 2 },
+    colonies: [],
+    codexUnread: null,
+    codexSeen: {},
+    visitedNeighbor: false,
+    contributed: false,
+    woven: false,
+    central: null,
+    lifeGuide: null,
+    comms: { radio: false, microwave: false, optical: false, neutrino: false, xray: false, gw: false },
+    openedLog: false,
+    contactFlyby: false,
+    year: 120,
+    window: null,
+    directives: null,
+    broadcast: true,
+    entrySpec: null,
     landed: null,
     surface: null,
     tech: {
@@ -176,6 +195,17 @@ export function createGame(saved) {
     g.goals = saved.goals || {};
     g.universes = Array.isArray(saved.universes) ? saved.universes : [];
     if (saved.backer == null) g.backer = true;
+    if (saved.window && saved.window.start != null) {
+      g.window = resumeSnapshot({
+        systemId: saved.window.systemId,
+        start: saved.window.start,
+        end: saved.window.end,
+        savedAt: saved.window.cursor,
+        directives: saved.directives || saved.window.directives || null,
+        state: null
+      });
+      g.directives = g.window.directives;
+    }
   }
 
   function catalog() {
@@ -1049,7 +1079,12 @@ export function createGame(saved) {
       surface: g.surface && g.surface.kind === 'rescue' ? g.surface : (g.landed ? { kind: 'field' } : null),
       coins: g.coins, backer: g.backer, founder: true, suit: g.suit, shipDesign: g.shipDesign,
       robots: g.robots, universes: g.universes, actualized: g.actualized, logged: g.logged,
-      goals: g.goals, oneill: g.oneill, eva: g.eva, author: g.author, seen: g.seen
+      goals: g.goals, oneill: g.oneill, eva: g.eva, author: g.author, seen: g.seen,
+      window: g.window, directives: g.directives, year: g.year, comms: g.comms,
+      colonies: g.colonies, codexSeen: g.codexSeen, codexUnread: g.codexUnread,
+      openedLog: g.openedLog, contactFlyby: g.contactFlyby, visitedNeighbor: g.visitedNeighbor,
+      contributed: g.contributed, woven: g.woven, central: g.central, lifeGuide: g.lifeGuide,
+      broadcast: g.broadcast, entrySpec: g.entrySpec, stores: g.stores
     };
   }
 
@@ -1133,9 +1168,113 @@ export function createGame(saved) {
     return (g.ship.cargo.iron || 0) >= (cost.iron || 0) && (g.ship.cargo.ice || 0) >= (cost.ice || 0);
   }
 
+  function colonyHere() {
+    return (g.colonies || []).find((c) => c.planetId === g.landed) || null;
+  }
+
+  function unlockCodex(id) {
+    if (!g.codexSeen[id]) {
+      g.codexSeen[id] = true;
+      g.codexUnread = id;
+    }
+  }
+
+  function foundColony() {
+    if (!g.landed) {
+      const why = 'Land first. A colony needs ground.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    if (colonyHere()) return { ok: true };
+    if (g.stores.metals < 4 || g.stores.volatiles < 4) {
+      const why = 'The colony wants 4 metals and 4 volatiles. Hold Space to mine.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    g.stores.metals -= 4;
+    g.stores.volatiles -= 4;
+    g.colonies.push({
+      id: 'c-' + g.landed,
+      planetId: g.landed,
+      systemId: g.systemId,
+      name: 'First Light',
+      pop: 40,
+      habitat: false,
+      solar: false
+    });
+    g.stores.science += 3;
+    unlockCodex('rocket');
+    say('A colony stands. Closer stars give more energy and more flares. A locked world keeps its water in a twilight ring.');
+    return { ok: true, event: 'colony_founded' };
+  }
+
+  function buildHabitat() {
+    const c = colonyHere();
+    if (!c) {
+      const why = 'Found a colony before you raise a habitat.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    if (c.habitat) return { ok: true };
+    if (g.stores.metals < 6 || g.stores.energy < 8) {
+      const why = 'A habitat wants 6 metals and 8 energy.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    g.stores.metals -= 6;
+    g.stores.energy -= 8;
+    c.habitat = true;
+    c.pop += 80;
+    g.stores.biomass += 2;
+    unlockCodex('greenhouse');
+    say('The habitat is sealed. People for metal and energy. A solar collector would have spent the same metal on power instead.');
+    return { ok: true, event: 'habitat' };
+  }
+
+  function visitNeighbor() {
+    g.visitedNeighbor = true;
+    unlockCodex('doppler');
+    say('Ilya Voss keeps Stillwater in Quiet Harbor. You may leave a gift. You cannot take anything of theirs.');
+    return { ok: true, event: 'colony_visit' };
+  }
+
+  function contribute() {
+    if (g.stores.metals < 4) {
+      const why = 'The Long Relay wants 4 metals from your stores.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    g.stores.metals -= 4;
+    g.contributed = true;
+    g.stores.science += 4;
+    unlockCodex('hubble');
+    say('Your share is in the relay. No one can pull it back out.');
+    return { ok: true, event: 'joint_project' };
+  }
+
+  function giftSeed() {
+    if (!g.visitedNeighbor) return { ok: false, reason: 'Visit a colony before you leave a gift.' };
+    if (g.stores.biomass < 1) return { ok: false, reason: 'You need biomass to gift a seed.' };
+    g.stores.biomass -= 1;
+    say('A seed, given. Their colony keeps it.');
+    return { ok: true, event: 'gift' };
+  }
+
   function prompt() {
     if (g.cinematic && g.cinematic.kind === 'entry') return { id: 'entry', text: 'The ship is flying the entry corridor.' };
     if (g.cinematic && g.cinematic.kind === 'depart') return { id: 'coast', text: 'Sail out. The next star is ahead.' };
+    if (!g.landed && !g.landedOnce['home-world'] && (g.systemId === 'home-system' || g.systemId === 'proxima')) {
+      if (nearObjective()) return { id: 'land', text: 'Press L to land on Home' };
+      return { id: 'thrust', text: 'Hold W to thrust toward the marker' };
+    }
+    if (g.landed && !colonyHere()) return { id: 'colony', text: 'Press C to found a colony' };
+    if (g.landed && colonyHere() && !colonyHere().habitat) return { id: 'habitat', text: 'Press H to raise a habitat' };
+    if (g.codexUnread) return { id: 'codex', text: 'Press D to open the Discovery' };
+    if (!g.openedLog) return { id: 'log', text: 'Press O to open the Contact Log' };
+    if (!g.comms.gw) return { id: 'gw', text: 'Press G to build a gravitational-wave receiver' };
+    if (!g.contactFlyby) return { id: 'flyby', text: 'Press K for the first-contact flyby' };
+    if (!g.visitedNeighbor) return { id: 'visit', text: 'Press V to visit a neighbor colony' };
+    if (!g.contributed) return { id: 'joint', text: 'Press J to add your share of the relay' };
     if (!g.tech.sail && g.systemId === 'proxima') {
       if (g.landed) {
         if (sailReady()) return { id: 'sail', text: 'Press B to fit the solar sail' };
@@ -1153,8 +1292,106 @@ export function createGame(saved) {
         return { id: 'drone', text: 'Hold W to fly the drone to the wreck' };
       }
     }
-    if (!g.shared) return { id: 'forge', text: 'Press F to open the Behram Universe Forge' };
+    if (!g.shared) return { id: 'forge', text: 'Press F to open the Behram Loom' };
     return { id: 'free', text: 'The charts are open. I brings up Infinity Command.' };
+  }
+
+  function applyWeave(centerId, entryYear) {
+    const center = CENTERS.find((c) => c.id === centerId) || CENTERS.find((c) => c.id === 'bh');
+    const planet = {
+      id: 'home-world',
+      name: 'Home',
+      aAU: center.hazard > 0.8 ? 1.8 : 0.5,
+      mass: 1,
+      radius: 1,
+      atmosphere: 'n2o2',
+      pressure: 1,
+      water: center.hazard > 0.8 ? 0.15 : 0.55,
+      albedo: 0.3,
+      greenhouse: 0.8,
+      locked: center.id === 'm' || center.id === 'wd'
+    };
+    g.universes = [{
+      id: 'home-system',
+      name: center.name + ' system',
+      author: g.author,
+      about: center.lesson,
+      star: { mass: center.mass, L: center.L, teff: Math.min(center.teff, 12000), spectral: center.spectral, radius: Math.max(0.05, Math.min(center.radius, 2)) },
+      planets: [planet],
+      nebula: center.id === 'bh' ? [0.45, 0.12, 0.08] : [0.25, 0.15, 0.2],
+      blurb: center.lesson
+    }];
+    g.systemId = 'home-system';
+    g.central = center;
+    g.lifeGuide = emerge(center);
+    g.woven = true;
+    const spec = {
+      seed: center.id,
+      design: center.id,
+      formedAt: 0,
+      lifetime: center.years,
+      hazard: center.hazard,
+      techAfter: Math.min(center.years * 0.4, 2e8),
+      log: []
+    };
+    const entry = entryYear == null ? Math.min(center.years * 0.2, 1e7) : Number(entryYear);
+    const verdict = entryVerdict(spec, entry);
+    if (!verdict.ok) {
+      say(verdict.reason);
+      return { ok: false, reason: verdict.reason };
+    }
+    const opened = openWindow(spec, entry, 'home-system');
+    const room = spec.lifetime - entry;
+    const head = Math.min(120, room > 1 ? room - 1 : 0);
+    let win = head > 0 ? advanceCursor(opened.window, head) : opened.window;
+    win = setDirectives(win, { broadcast: g.broadcast !== false, research: false });
+    g.window = win;
+    g.directives = win.directives;
+    g.year = head;
+    g.entrySpec = spec;
+    g.docked = false;
+    g.landed = null;
+    parkNear('home-world', 34);
+    say(center.clock);
+    return { ok: true, center, life: g.lifeGuide, stage: opened.stage };
+  }
+
+  function researchComm(id) {
+    if (!g.comms[id] && g.comms[id] !== false && id !== 'gw' && id !== 'radio') {
+      /* allow known ids only */
+    }
+    if (!['radio', 'microwave', 'optical', 'neutrino', 'xray', 'gw'].includes(id)) {
+      return { ok: false, reason: 'Unknown channel.' };
+    }
+    if (g.comms[id]) return { ok: true };
+    if (g.stores.science < 2) {
+      const why = 'That receiver wants 2 science, earned by founding and building.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    g.stores.science -= 2;
+    g.comms[id] = true;
+    if (id === 'gw') g.codexSeen.lightcone = true;
+    say(id === 'gw'
+      ? 'The receiver is listening. What was only a tremor now has a sender, a delay, and a world you can fly past.'
+      : 'That channel is open.');
+    return { ok: true };
+  }
+
+  function markLogOpened() {
+    g.openedLog = true;
+    return { ok: true };
+  }
+
+  function seeFlyby() {
+    if (!g.comms.gw) {
+      const why = 'The flyby is still inside the redaction. Build the gravitational-wave receiver first.';
+      say(why);
+      return { ok: false, reason: why };
+    }
+    g.contactFlyby = true;
+    say('First contact. You see Stillwater as Ilya Voss built it: a quiet K star, an ocean world, a society you did not design.');
+    return { ok: true, event: 'first_contact' };
   }
 
   function fitSail() {
@@ -1213,6 +1450,8 @@ export function createGame(saved) {
     serialize, save, sys, findPlanet, catalog, pointAlong, trade, buildRobot, respondThreat,
     recharge, visitOneill, settleOneill, freshCompletions, addUniverse, actualize, noteGoal,
     lockedChem, mine, hydrate, prompt, objectiveId, fitSail, crossTrappist, sailReady, nearObjective,
+    foundColony, buildHabitat, visitNeighbor, contribute, giftSeed, unlockCodex,
+    applyWeave, researchComm, markLogOpened, seeFlyby,
     deltaV() { return deltaV(g.ship, (DRIVES[g.ship.drive] || DRIVES.chem).ve || 1.75); },
     mass() { return shipMass(g.ship); }
   };

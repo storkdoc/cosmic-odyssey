@@ -1,4 +1,5 @@
-/* Full voyage, desktop keyboard and iPhone touch. Serves the repo and drives the prompts. */
+/* Desktop keyboard and iPhone touch. Designs a system, flies, lands, builds,
+   opens the Codex, and resolves a redacted contact. */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -36,61 +37,71 @@ async function holdKey(page, key, until) {
 async function holdTap(page, selector, until) {
   const box = await page.locator(selector).boundingBox();
   if (!box) throw new Error('no box for ' + selector);
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.touchscreen.tap(x, y);
   await page.locator(selector).dispatchEvent('pointerdown');
   try { await until(); }
   finally { await page.locator(selector).dispatchEvent('pointerup'); }
 }
 
 async function voyage(page, touch) {
-  const prompt = () => page.locator('#prompt').innerText();
   const waitPrompt = (part) => page.waitForFunction((p) => {
     const el = document.getElementById('prompt');
     return el && el.textContent.includes(p);
   }, part, { timeout: 45000 });
+  const press = async (key, sel) => {
+    if (touch) await page.tap(sel);
+    else await page.keyboard.press(key);
+  };
 
-  await page.click('#begin');
+  const click = async (sel) => page.click(sel, { timeout: 15000 });
+  await click('#begin');
   await page.keyboard.press('Escape');
-  await waitPrompt('Hold W');
+  await page.waitForSelector('#design:not([hidden])');
+  await click('#center-bh');
+  await page.waitForFunction(() => document.getElementById('cosmic-clock').textContent.includes('50 million'));
+  await click('#place-world');
+  await page.waitForFunction(() => document.getElementById('life-guide').textContent.includes('Subsurface'));
+  await click('#launch-system');
 
+  await waitPrompt('Hold W');
   if (touch) await holdTap(page, '#act-thrust', () => waitPrompt('Press L'));
   else await holdKey(page, 'KeyW', () => waitPrompt('Press L'));
+  await press('KeyL', '#act-land');
+  await waitPrompt('Press C');
+  await press('KeyC', '#act-colony');
+  const dismissDiscovery = async () => {
+    const text = await page.locator('#prompt').innerText();
+    if (!text.includes('Press D')) return;
+    await press('KeyD', '#act-codex');
+    await page.waitForSelector('#codex-card:not([hidden])', { timeout: 5000 });
+    await click('#codex-close');
+  };
 
-  if (touch) await page.tap('#act-land');
-  else await page.keyboard.press('KeyL');
-  await waitPrompt('Hold Space');
+  await waitPrompt('Press H');
+  await press('KeyH', '#act-habitat');
+  await waitPrompt('Press D');
+  await dismissDiscovery();
 
-  if (touch) await holdTap(page, '#act-mine', () => waitPrompt('Press B'));
-  else await holdKey(page, 'Space', () => waitPrompt('Press B'));
-
-  if (touch) await page.tap('#act-sail');
-  else await page.keyboard.press('KeyB');
-  await waitPrompt('Press T');
-
-  if (touch) await page.tap('#act-cross');
-  else await page.keyboard.press('KeyT');
-  await waitPrompt('Press L to reach');
-
-  if (touch) await page.tap('#act-land');
-  else await page.keyboard.press('KeyL');
-  await waitPrompt('Hold W to fly the drone');
-
-  if (touch) await holdTap(page, '#act-thrust', () => waitPrompt('Hold R'));
-  else await holdKey(page, 'KeyW', () => waitPrompt('Hold R'));
-
-  if (touch) await holdTap(page, '#act-rescue', () => waitPrompt('Press F'));
-  else await holdKey(page, 'KeyR', () => waitPrompt('Press F'));
-
-  if (touch) await page.tap('#act-forge');
-  else await page.keyboard.press('KeyF');
-  await page.fill('#uni-name', 'Playtest Reach');
-  await page.click('#publish-universe');
+  await waitPrompt('Press O');
+  await press('KeyO', '#act-log');
   await page.waitForFunction(() => {
-    const s = document.getElementById('publish-status');
-    return s && s.textContent.includes('Published');
-  }, null, { timeout: 20000 });
+    const list = document.getElementById('log-list');
+    return list && list.textContent.includes('unexplained exchange') && !list.textContent.includes('Mara');
+  });
+  await click('#research-gw');
+  await page.waitForFunction(() => document.getElementById('log-list').textContent.includes('Mara Quill'));
+  await click('#flyby-seed');
+  await page.waitForFunction(() => document.getElementById('flyby-card').textContent.includes('Stillwater'));
+
+  await click('#log-close');
+  await waitPrompt('Press V');
+  await press('KeyV', '#act-visit');
+  await waitPrompt('Press D');
+  await dismissDiscovery();
+  await waitPrompt('Press J');
+  await press('KeyJ', '#act-joint');
+  await page.waitForFunction(() => (document.getElementById('line-text').textContent || '').includes('share is in the relay'));
+  await click('#open-ruler');
+  await page.waitForSelector('#ruler:not([hidden])');
 }
 
 const server = await serve();
@@ -111,18 +122,21 @@ try {
     const errors = [];
     page.on('pageerror', (err) => errors.push(String(err)));
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
-    await page.goto(`http://127.0.0.1:${port}/?test=1`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
     try {
       await voyage(page, touch);
-      console.log(name, 'PASS', errors.length ? 'console ' + errors.slice(0, 3).join(' | ') : 'clean');
       const real = errors.filter((e) => !/favicon|ReadPixels|GL Driver|AudioContext/i.test(e));
-      if (real.length) { failed++; console.log('  errors', real.slice(0, 5)); }
+      console.log(name, real.length ? 'FAIL' : 'PASS', real.slice(0, 3).join(' | '));
+      if (real.length) failed++;
     } catch (err) {
       failed++;
-      console.log(name, 'FAIL', err.message);
-      const shot = `/tmp/play-${name}.png`;
-      await page.screenshot({ path: shot }).catch(() => {});
-      console.log('  shot', shot, 'prompt', await page.locator('#prompt').innerText().catch(() => ''));
+      console.log(name, 'FAIL', err.message.split('\n')[0]);
+      await page.screenshot({ path: `/tmp/play-${name}.png` }).catch(() => {});
+      console.log('  prompt', await page.locator('#prompt').innerText().catch(() => ''));
+      console.log('  clock', await page.locator('#cosmic-clock').innerText().catch(() => ''));
+      console.log('  life', await page.locator('#life-guide').innerText().catch(() => ''));
+      const real = errors.filter((e) => !/favicon|ReadPixels|GL Driver|AudioContext/i.test(e));
+      if (real.length) console.log('  errors', real.slice(0, 4).join(' | '));
     }
     await context.close();
   }

@@ -6,13 +6,14 @@
 export const NAMES = {
   founder: 'Steve Behram',
   byline: 'by Steve Behram',
-  forge: 'Behram Universe Forge',
+  forge: 'The Behram Loom',
+  constant: 'Behram Constant',
   nebula: 'Behram Nebula',
   star: 'Behram Star',
   ship: "Behram's Gift",
   coins: 75,
-  dedication: 'A gift for the backers who were let down. Let’s build a universe together.',
-  plaque: 'Founding backer and creator of this voyage. The Behram Universe Forge is his namesake backer item.'
+  dedication: 'A gift for the backers who were let down. The Behram Loom weaves a universe for everyone who was left waiting.',
+  plaque: 'Founding backer and creator. The Behram Loom, his namesake instrument, draws new worlds out of the primordial field. The Behram Constant is the number that sets how tightly a cosmos is woven.'
 };
 import { aFromPeriod, planetRadius, starGM, planetGM } from './sim.js';
 
@@ -392,7 +393,7 @@ export const PERKS = [
   {
     id: 'namesake', name: 'Namesake Item', who: 'founder',
     title: 'Namesake Item',
-    text: 'Steve Behram’s namesake item is the Behram Universe Forge, the workshop where a universe is designed, named, and shared.'
+    text: 'Steve Behram’s namesake item is the Behram Loom, the instrument that weaves a universe from the primordial field. The Behram Constant is the setting on that loom.'
   }
 ];
 

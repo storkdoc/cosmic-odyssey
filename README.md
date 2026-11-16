@@ -12,7 +12,7 @@ The guide is LYRA, an original hologram science guide of the Galactic Coalition.
 
 ## The voyage
 
-You begin in flight near Proxima b, with one prompt at a time. Assist is on: hold W toward the marker, then press L and the ship flies the entry corridor. A tap or a key skips the Savage Planets card and the title. The first tap also starts the music. N turns assist off if you want the burns yourself.
+You design a starting system first, on a fixed galactic ruler. Year 0 never moves, and the wall clock does not push it. Each civilization is a window on that ruler. Then you are in flight, with one prompt at a time. Assist is on: hold W toward the marker, then press L and the ship flies the entry corridor. A tap or a key skips the Savage Planets card and the title. The first tap also starts the music. N turns assist off if you want the burns yourself. The ruler, the windows, and the light-travel rules are in `TIME.md`.
 
 From the station:
 
@@ -20,7 +20,7 @@ From the station:
 - **Planetary lab** — research the nine gates, style a suit, build a miner and a watcher satellite.
 - **Mission Control** — the board, from the Proxima shakedown through the TRAPPIST rescue to the Behram Star.
 - **Trading outpost** — Challenge Coins for ore, fuel, and xenon.
-- **Behram Universe Forge** — Steve’s namesake backer item. Design a star and its worlds. The lab computes equilibrium temperature, surface temperature, and the habitable zone.
+- **The Behram Loom** — Steve’s namesake. The Behram Constant is how tightly a cosmos is woven. Design a central body, choose an entry year the star can actually support, and let life follow from the physics.
 - **Charts** — the real neighborhood, three guest universes (Ilya Voss, Mara Quill, Soren Pell — original names), and universes other players have published.
 - **O’Neill colony** — a cylinder habitat you can stand in and settle, once a world of yours can hold life.
 - **Backer Vault** and the **plaque**.
@@ -45,7 +45,10 @@ Progress is saved in this browser (`localStorage` key `cosmic-odyssey.save`).
 | B | Fit the solar sail, once the ore is aboard |
 | T | Cross to TRAPPIST-1 |
 | R | Bring the pilot aboard, beside the wreck |
-| F | Open the Behram Universe Forge |
+| F | Open the Behram Loom |
+| O | Open the Contact Log |
+| D | Open a Discovery |
+| G | Build a gravitational-wave receiver, when the log asks |
 | N | Assist on or off. Off is Newtonian |
 | I | Infinity Command, the station buttons |
 | Shift | Jet pack on a surface, with the helmet |
@@ -81,4 +84,6 @@ The game is static files at the repository root. GitHub Pages serves `index.html
 
 ```bash
 node tests/physics.test.js
+node tests/science.test.js
+node tests/time.test.js
 ```
