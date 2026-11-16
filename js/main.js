@@ -1227,6 +1227,7 @@ function loop(now) {
     if (next !== cue) { cue = next; if (audio.unlocked) audio.score(next); }
     const pr = sim.prompt();
     $('prompt').textContent = pr.text;
+    document.body.classList.toggle('letterbox', !!(sim.g.cinematic && sim.g.cinematic.kind !== 'sling'));
     document.querySelectorAll('#actions button').forEach((b) => b.classList.remove('now'));
     const act = { thrust: 'act-thrust', land: 'act-land', entry: 'act-land', mine: 'act-mine', sail: 'act-sail', cross: 'act-cross', coast: 'act-cross', drone: 'act-thrust', grab: 'act-rescue', forge: 'act-forge', colony: 'act-colony', habitat: 'act-habitat', codex: 'act-codex', visit: 'act-visit', joint: 'act-joint', log: 'act-log', gw: 'act-log', flyby: 'act-log' }[pr.id];
     if (act && $(act)) $(act).classList.add('now');

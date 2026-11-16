@@ -23,6 +23,12 @@ Background music is real recorded orchestral and concert-band performance. Nothi
 
 Jupiter opens launches, slingshots, and the rescue approach’s neighbors. Venus stays with Infinity Command, the lab, and the Forge. Mercury, Dvořák, and Jupiter rotate in free flight. The Ride of the Valkyries enters for the TRAPPIST rescue. Zarathustra plays the opening fly-in. The same piece keeps playing across a scene change when the cue does not change, and a new cue crossfades.
 
+## Models and pictures
+
+The ship, the EVA suit, the lander, the survey drone, and the beacon are original geometry built in the game: lathed hulls, smooth capsule limbs on a joint hierarchy (idle, walk, and jetpack), panel-line maps, and physical materials. They are not a low-poly kit. NASA publishes a public-domain Extravehicular Mobility Unit model, but the current file is Draco-compressed and this static page does not ship the decoder, so that mesh is not embedded. The suit here is an original stand-in with the same job: a helmet, a gold rim, a backpack, and hoses.
+
+The Milky Way sky is a photograph: ESO/S. Brunier, [The Milky Way panorama](https://www.eso.org/public/images/eso0932a/), CC BY 4.0. It is also the image-based light on the metal. Planet color, clouds, city lights, and the limb are shaders in the page, not a borrowed texture pack. The black-hole disk and photon ring are a shader. They suggest the look of a fed disk. They are not a full relativistic ray trace.
+
 ## Code
 
 Flight, climate, and the first system tables began as an unfinished prototype in the public repository `storkdoc/behram-arcade`, branch `cosmic-odyssey-wip`, commit `3212424`, folder `games/exo-odyssey/`. That repository was not changed. Three.js r169 and the post-processing passes are the MIT-licensed library, vendored under `vendor/three/` with its license file.

@@ -458,7 +458,7 @@ export function createGame(saved) {
     if (g.lineT > 0) g.lineT -= dt;
     if (g.hullFlash > 0) g.hullFlash -= dt;
     if (g.cinematic) {
-      g.cinematic.t += dt;
+      g.cinematic.t += Math.min(0.25, realDt || dt);
       if (g.cinematic.kind === 'launch' && g.cinematic.t < 2.6) g.ship.throttle = 1;
       if (g.cinematic.t >= g.cinematic.dur) finishCinematic();
     }
@@ -1204,7 +1204,7 @@ export function createGame(saved) {
     });
     g.stores.science += 3;
     unlockCodex('rocket');
-    say('A colony stands. Closer stars give more energy and more flares. A locked world keeps its water in a twilight ring.');
+    say('The beacon is lit. A colony stands. Closer stars give more energy and more flares.');
     return { ok: true, event: 'colony_founded' };
   }
 
@@ -1264,11 +1264,11 @@ export function createGame(saved) {
     if (g.cinematic && g.cinematic.kind === 'entry') return { id: 'entry', text: 'The ship is flying the entry corridor.' };
     if (g.cinematic && g.cinematic.kind === 'depart') return { id: 'coast', text: 'Sail out. The next star is ahead.' };
     if (!g.landed && !g.landedOnce['home-world'] && (g.systemId === 'home-system' || g.systemId === 'proxima')) {
-      if (nearObjective()) return { id: 'land', text: 'Press L to land on Home' };
-      return { id: 'thrust', text: 'Hold W to thrust toward the marker' };
+      if (nearObjective()) return { id: 'land', text: 'Press L to land on Home. The corridor flies you down.' };
+      return { id: 'thrust', text: 'Hold W to thrust toward the marker. That light is your world.' };
     }
-    if (g.landed && !colonyHere()) return { id: 'colony', text: 'Press C to found a colony' };
-    if (g.landed && colonyHere() && !colonyHere().habitat) return { id: 'habitat', text: 'Press H to raise a habitat' };
+    if (g.landed && !colonyHere()) return { id: 'colony', text: 'Press C to found a colony and light the beacon.' };
+    if (g.landed && colonyHere() && !colonyHere().habitat) return { id: 'habitat', text: 'Press H to raise a habitat. People, for metal and power.' };
     if (g.codexUnread) return { id: 'codex', text: 'Press D to open the Discovery' };
     if (!g.openedLog) return { id: 'log', text: 'Press O to open the Contact Log' };
     if (!g.comms.gw) return { id: 'gw', text: 'Press G to build a gravitational-wave receiver' };
