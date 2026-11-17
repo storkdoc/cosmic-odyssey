@@ -1,522 +1,130 @@
-/* Cosmic Odyssey. Design a system, awaken life, fly, scan, and listen. */
-import { createAudio } from '../audio.js';
+/* First chapter: how many stars, then each star, then a stable system. */
 import { createView } from './view.js';
-import {
-  STAR_TYPES, COMPOSITIONS, ATMOSPHERES, CODEX, createSystem, setStarCount, setArchitecture,
-  setStarType, rename, addPlanet, addMoon, addBelt, analyze, evolve, scanBody, contactState,
-  formatYears, layoutBodies
-} from './universe.js';
+import { STAR_TYPES, defaultsFor, derive, formatYears, starType, iscoRadii } from './stars.js';
+import { designSystem } from './systems.js';
+import { createAudio } from '../audio.js';
 
-const $ = (id) => document.getElementById(id);
+const KEY = 'cosmic-odyssey.star';
+const present = document.getElementById('present');
+const title = document.getElementById('title');
+const countStep = document.getElementById('count');
+const studio = document.getElementById('studio');
+const features = document.getElementById('features');
+const menu = document.getElementById('star-menu');
+const next = document.getElementById('next');
+const credits = document.getElementById('credits');
+const pathsBtn = document.getElementById('paths');
+
+const view = createView(document.getElementById('view'));
 const audio = createAudio();
-const view = createView($('view'));
-const SAVE = 'cosmic-odyssey.system';
+audio.setVolume(1);
 
-let sys = load() || createSystem();
-let step = 'stars';
-let phase = 'title';
-let selected = 0;
-let flight = null;
-let spin = 0;
+if (window.MoodSticker) {
+  MoodSticker.game('cosmic-odyssey');
+  MoodSticker.screen('present');
+}
+
+let spec = null;
+let starCount = 1;
+let built = [];
 let last = performance.now();
-const keys = {};
-
-function load() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(SAVE) || 'null');
-    if (raw && raw.v === 2 && Array.isArray(raw.planets)) return raw;
-  } catch (err) { /* fresh system */ }
-  return null;
-}
-function save() {
-  try { localStorage.setItem(SAVE, JSON.stringify(sys)); } catch (err) { /* private mode */ }
-}
-function usage(name, detail) {
-  if (window.MoodSticker && MoodSticker.usage) MoodSticker.usage(name, detail);
-}
-function word() {
-  return '<span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span>';
-}
-
-function show(id) {
-  ['title', 'atelier', 'flight-hud', 'scan', 'codex', 'contact', 'evolve'].forEach((key) => {
-    const el = $(key);
-    if (el) el.hidden = key !== id;
-  });
-}
-
-function bootTitle() {
-  phase = 'title';
-  $('present').classList.remove('show');
-  $('title').hidden = false;
-  document.body.classList.add('cinema');
-}
-
-$('begin').addEventListener('click', () => {
-  audio.start();
-  audio.score('quiet');
-  if (window.MoodSticker) {
-    MoodSticker.game('cosmic-odyssey');
-    MoodSticker.screen('builder');
-  }
-  $('title').hidden = true;
-  document.body.classList.remove('cinema');
-  phase = 'build';
-  $('atelier').hidden = false;
-  renderStep();
-  usage('builder_opened', 'stars');
-});
-
-document.addEventListener('click', (e) => {
-  const a = e.target.closest && e.target.closest('a.sp-link');
-  if (!a) return;
-  usage('savageplanets_click', a.getAttribute('href') || 'https://savageplanets.com');
-});
-document.addEventListener('pointerdown', () => {
-  if ($('present').classList.contains('show')) bootTitle();
-});
-addEventListener('keydown', (e) => {
-  if ($('present').classList.contains('show')) { bootTitle(); return; }
-  keys[e.code] = true;
-  if (phase !== 'flight') return;
-  if (e.code === 'KeyO') enterOrbit();
-  if (e.code === 'KeyL') land();
-  if (e.code === 'KeyC') openScan();
-  if (e.code === 'KeyK') openContact();
-});
-addEventListener('keyup', (e) => { keys[e.code] = false; });
-
-function chip(id, label, on, fn) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.id = id;
-  b.className = on ? 'chip on' : 'chip';
-  b.textContent = label;
-  b.addEventListener('click', fn);
-  return b;
-}
-
-function renderStep() {
-  const host = $('step');
-  host.innerHTML = '';
-  $('step-stars').classList.toggle('on', step === 'stars');
-  $('step-worlds').classList.toggle('on', step === 'worlds');
-  $('step-moons').classList.toggle('on', step === 'moons');
-  $('step-awaken').classList.toggle('on', step === 'awaken');
-  if (step === 'stars') renderStars(host);
-  else if (step === 'worlds') renderWorlds(host);
-  else if (step === 'moons') renderMoons(host);
-  else renderAwaken(host);
-  view.place(sys, spin);
-  save();
-}
-
-function renderStars(host) {
-  host.append(el('p', 'kicker', 'Stars'));
-  host.append(el('h2', '', 'How many suns'));
-  const row = el('div', 'row');
-  for (let n = 0; n <= 3; n++) {
-    row.append(chip('star-' + n, n === 0 ? 'None' : String(n), sys.starCount === n, () => {
-      setStarCount(sys, n);
-      renderStep();
-    }));
-  }
-  host.append(row);
-  if (sys.starCount === 0) {
-    host.append(el('p', 'note', 'A rogue system. Worlds keep the heat they were born with. There is no habitable zone of sunlight.'));
-  }
-  if (sys.starCount >= 2) {
-    host.append(el('p', 'kicker', 'Arrangement'));
-    const arch = el('div', 'row');
-    if (sys.starCount === 2) {
-      arch.append(chip('arch-s', 'S-type, one star each', sys.architecture === 's-type', () => { setArchitecture(sys, 's-type'); renderStep(); }));
-      arch.append(chip('arch-p', 'P-type, around both', sys.architecture === 'p-type', () => { setArchitecture(sys, 'p-type'); renderStep(); }));
-    } else {
-      arch.append(chip('arch-h', 'Hierarchical triple', sys.architecture === 'hierarchical', () => { setArchitecture(sys, 'hierarchical'); renderStep(); }));
-    }
-    host.append(arch);
-    host.append(slider('Separation', sys.separationAU, 0.2, 80, 0.1, 'sep', 'AU', (v) => { sys.separationAU = v; }));
-    if (sys.starCount === 3) host.append(slider('Outer star', sys.outerAU, 10, 400, 1, 'outer', 'AU', (v) => { sys.outerAU = v; }));
-  }
-  sys.stars.forEach((star, i) => {
-    host.append(el('p', 'kicker', 'Star ' + (i + 1)));
-    const name = document.createElement('input');
-    name.id = i === 0 ? 'star-name' : 'star-name-' + i;
-    name.value = star.name;
-    name.maxLength = 32;
-    name.setAttribute('aria-label', 'Star name');
-    name.addEventListener('change', () => { rename(sys, star.id, name.value); save(); });
-    host.append(name);
-    const types = el('div', 'row wrap');
-    STAR_TYPES.forEach((t) => {
-      types.append(chip('type-' + t.id + '-' + i, t.name, star.type === t.id, () => { setStarType(sys, i, t.id); renderStep(); }));
-    });
-    host.append(types);
-    const spec = STAR_TYPES.find((t) => t.id === star.type);
-    const hz = spec.L > 0 ? Math.sqrt(spec.L / 1.1) : 0;
-    const hzOut = spec.L > 0 ? Math.sqrt(spec.L / 0.36) : 0;
-    const line = el('p', 'physics', '');
-    line.id = i === 0 ? 'hz-readout' : 'hz-readout-' + i;
-    line.textContent = spec.name + ' · ' + spec.L + ' L☉ · lives about ' + formatYears(spec.years) + (spec.L ? ' · water zone ' + hz.toFixed(2) + '–' + hzOut.toFixed(2) + ' AU' : '');
-    host.append(line);
-  });
-  const report = analyze(sys);
-  const stab = el('div', 'warnings');
-  stab.id = 'stability';
-  stab.textContent = report.stability.map((s) => s.text).join(' ') || 'One star. Orbits are ordinary Keplerian paths.';
-  host.append(stab);
-  host.append(next('to-worlds', 'Worlds', () => { step = 'worlds'; renderStep(); }));
-}
-
-function paintWorld(i) {
-  const d = analyze(sys).planets[i];
-  const phys = $(i === 0 ? 'teq' : 'teq-' + i);
-  if (!phys || !d) return;
-  phys.textContent = [
-    'Teq ' + Math.round(d.teq) + ' K',
-    'surface ' + Math.round(d.tsurf) + ' K',
-    'g ' + d.g.toFixed(2) + ' m/s²',
-    'escape ' + d.vesc.toFixed(1) + ' km/s',
-    d.period ? 'period ' + d.period.toFixed(2) + ' yr' : 'no star, no year',
-    'mass ' + d.mass.toFixed(2) + ' M⊕'
-  ].join(' · ');
-}
-
-function renderWorlds(host) {
-  host.append(el('p', 'kicker', 'Worlds'));
-  host.append(el('h2', '', 'Planets'));
-  if (!sys.planets.length) host.append(el('p', 'note', 'Add a world. Distance, size, and density decide the rest.'));
-  sys.planets.forEach((planet, i) => {
-    const card = el('article', 'card');
-    if (i === selected) card.id = 'physics-card';
-    const name = document.createElement('input');
-    name.id = i === 0 ? 'world-name' : 'world-name-' + i;
-    name.value = planet.name;
-    name.maxLength = 32;
-    name.setAttribute('aria-label', 'Planet name');
-    name.addEventListener('change', () => { rename(sys, planet.id, name.value); save(); });
-    card.append(name);
-    const comps = el('div', 'row wrap');
-    COMPOSITIONS.forEach((c) => {
-      comps.append(chip((i === 0 ? 'comp-' : 'comp' + i + '-') + c.id, c.name, planet.composition === c.id, () => {
-        planet.composition = c.id;
-        planet.density = c.density;
-        if (!c.land) planet.atmosphere = 'h2';
-        selected = i;
-        renderStep();
-      }));
-    });
-    card.append(comps);
-    card.append(slider('Distance', planet.aAU, 0.05, 40, 0.05, i === 0 ? 'world-au' : 'au-' + i, 'AU', (v) => { planet.aAU = v; paintWorld(i); }));
-    card.append(slider('Radius', planet.radius, 0.2, 16, 0.1, i === 0 ? 'world-radius' : 'rad-' + i, 'R⊕', (v) => { planet.radius = v; paintWorld(i); }));
-    card.append(slider('Density', planet.density, 0.4, 10, 0.1, i === 0 ? 'world-density' : 'den-' + i, 'g/cm³', (v) => { planet.density = v; paintWorld(i); }));
-    const airs = el('div', 'row wrap');
-    ATMOSPHERES.forEach((a) => {
-      airs.append(chip('air-' + a.id + '-' + i, a.name, planet.atmosphere === a.id, () => { planet.atmosphere = a.id; selected = i; renderStep(); }));
-    });
-    card.append(airs);
-    const d = analyze(sys).planets[i];
-    const phys = el('p', 'physics', '');
-    phys.id = i === 0 ? 'teq' : 'teq-' + i;
-    phys.textContent = [
-      'Teq ' + Math.round(d.teq) + ' K',
-      'surface ' + Math.round(d.tsurf) + ' K',
-      'g ' + d.g.toFixed(2) + ' m/s²',
-      'escape ' + d.vesc.toFixed(1) + ' km/s',
-      d.period ? 'period ' + d.period.toFixed(2) + ' yr' : 'no star, no year',
-      'mass ' + d.mass.toFixed(2) + ' M⊕'
-    ].join(' · ');
-    card.append(phys);
-    if (d.warnings.length) card.append(el('p', 'warn', d.warnings[0]));
-    const go = el('button', '', 'Select');
-    go.type = 'button';
-    go.addEventListener('click', () => { selected = i; renderStep(); });
-    card.append(go);
-    host.append(card);
-  });
-  const add = el('button', 'primary', 'Add a world');
-  add.id = 'add-world';
-  add.type = 'button';
-  add.addEventListener('click', () => { addPlanet(sys); selected = sys.planets.length - 1; renderStep(); });
-  host.append(add);
-  const nav = el('div', 'row');
-  nav.append(next('to-stars', 'Stars', () => { step = 'stars'; renderStep(); }));
-  nav.append(next('to-moons', 'Moons', () => { step = 'moons'; renderStep(); }));
-  host.append(nav);
-}
-
-function renderMoons(host) {
-  host.append(el('p', 'kicker', 'Company'));
-  host.append(el('h2', '', 'Moons and belts'));
-  if (!sys.planets.length) host.append(el('p', 'note', 'Add a planet first.'));
-  const planet = sys.planets[selected] || sys.planets[0];
-  if (planet) {
-    host.append(el('p', 'note', 'Moons of ' + planet.name + '. They must sit outside the Roche limit and inside the Hill sphere.'));
-    planet.moons.forEach((moon, i) => {
-      const card = el('article', 'card');
-      const name = document.createElement('input');
-      name.id = i === 0 ? 'moon-name' : 'moon-name-' + i;
-      name.value = moon.name;
-      name.maxLength = 32;
-      name.setAttribute('aria-label', 'Moon name');
-      name.addEventListener('change', () => { rename(sys, moon.id, name.value); save(); });
-      card.append(name);
-      card.append(slider('Distance', moon.distanceRadii, 2, 80, 1, i === 0 ? 'moon-dist' : 'md-' + i, 'radii', (v) => { moon.distanceRadii = v; }));
-      card.append(slider('Radius', moon.radius, 0.05, Math.max(0.2, planet.radius * 0.7), 0.01, i === 0 ? 'moon-radius' : 'mr-' + i, 'R⊕', (v) => { moon.radius = v; }));
-      const d = analyze(sys).planets.find((p) => p.id === planet.id).moons[i];
-      const note = el('p', d.warnings.length ? 'warn' : 'physics', '');
-      if (i === 0) note.id = 'roche-note';
-      note.textContent = d.warnings.length ? d.warnings[0] : 'Roche ' + d.rocheRadii.toFixed(2) + ' planetary radii · Hill ' + d.hillRadii.toFixed(0) + ' radii. This moon is held.';
-      card.append(note);
-      host.append(card);
-    });
-    const add = el('button', 'primary', 'Add a moon');
-    add.id = 'add-moon';
-    add.type = 'button';
-    add.addEventListener('click', () => { addMoon(sys, planet.id); renderStep(); });
-    host.append(add);
-  }
-  sys.belts.forEach((belt) => host.append(el('p', 'note', belt.name + ' at ' + belt.aAU.toFixed(2) + ' AU')));
-  const belt = el('button', '', 'Add an asteroid belt');
-  belt.id = 'add-belt';
-  belt.type = 'button';
-  belt.addEventListener('click', () => { addBelt(sys); renderStep(); });
-  host.append(belt);
-  const nav = el('div', 'row');
-  nav.append(next('to-worlds-back', 'Worlds', () => { step = 'worlds'; renderStep(); }));
-  nav.append(next('to-awaken', 'Awaken', () => { step = 'awaken'; renderStep(); }));
-  host.append(nav);
-}
-
-function renderAwaken(host) {
-  host.append(el('p', 'kicker', 'Life'));
-  host.append(el('h2', '', 'Let the ages run'));
-  host.append(el('p', 'note', 'Life is not painted. It follows the light, the solvent, and the time.'));
-  host.append(slider('Age', sys.ageYears / 1e9, 0.01, 12, 0.01, 'age', 'Gyr', (v) => { sys.ageYears = v * 1e9; }));
-  const preview = evolve({ ...sys, planets: sys.planets.map((p) => ({ ...p, moons: p.moons.map((m) => ({ ...m })) })), stars: sys.stars.map((s) => ({ ...s })) }, sys.ageYears);
-  const card = el('div', 'physics');
-  card.id = 'life-preview';
-  card.textContent = preview.planets.map((p) => p.name + ': ' + (p.life ? p.life.stage + ' · ' + p.life.form : 'quiet')).join(' ');
-  host.append(card);
-  const go = el('button', 'primary', 'Evolve life');
-  go.id = 'do-evolve';
-  go.type = 'button';
-  go.addEventListener('click', () => awaken());
-  host.append(go);
-  host.append(next('back-moons', 'Moons', () => { step = 'moons'; renderStep(); }));
-}
-
-function awaken() {
-  sys = evolve(sys, sys.ageYears);
-  save();
-  usage('life_evolved', sys.civs.length ? 'civ' : 'quiet');
-  phase = 'evolve';
-  $('atelier').hidden = true;
-  $('evolve').hidden = false;
-  document.body.classList.add('letterbox');
-  audio.score('launch');
-  const lines = sys.planets.map((p) => p.name + ' — ' + p.life.stage + '. ' + p.life.form);
-  let i = 0;
-  const card = $('life-card');
-  const tick = () => {
-    card.textContent = lines[i] || lines[lines.length - 1] || 'The system is quiet.';
-    i += 1;
-  };
-  tick();
-  const timer = setInterval(() => {
-    if (i >= lines.length) { clearInterval(timer); return; }
-    tick();
-  }, 900);
-  $('launch').onclick = () => { clearInterval(timer); launch(); };
-}
-
-function launch() {
-  document.body.classList.remove('letterbox');
-  $('evolve').hidden = true;
-  phase = 'flight';
-  $('flight-hud').hidden = false;
-  const bodies = layoutBodies(sys, 0);
-  const first = bodies[0];
-  flight = {
-    mode: 'cruise',
-    target: 0,
-    spin,
-    pose: {
-      x: first ? first.x * 0.35 : 8,
-      z: first ? first.z * 0.35 : 8,
-      heading: 0,
-      thrust: 0
-    }
-  };
-  view.place(sys, spin);
-  view.dressShip(sys.playerShip);
-  view.setMode('flight');
-  audio.score('flight');
-  usage('system_forged', sys.id);
-  renderFlight();
-}
-
-function currentBody() {
-  return layoutBodies(sys, flight ? flight.spin : spin)[flight.target] || null;
-}
-
-function renderFlight() {
-  const list = $('targets');
-  list.innerHTML = '';
-  layoutBodies(sys, flight.spin).forEach((planet, i) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.id = 'goto-' + i;
-    b.className = i === flight.target ? 'on' : '';
-    b.textContent = planet.name;
-    b.addEventListener('click', () => { flight.target = i; flight.mode = 'cruise'; renderFlight(); });
-    list.append(b);
-  });
-  const body = currentBody();
-  $('flight-readout').textContent = body
-    ? sys.playerShip.name + ' · ' + body.name + ' · ' + (body.life ? body.life.stage : '')
-    : sys.playerShip.name;
-  $('ship-blurb').textContent = 'Hull ' + sys.playerShip.name + ', a ' + sys.playerShip.culture + ' shape. Sensors: composition, density, temperature, life.';
-}
-
-function enterOrbit() {
-  if (!flight || !closeEnough()) return;
-  flight.mode = 'orbit';
-  audio.sfx && audio.sfx.ping && audio.sfx.ping();
-  renderFlight();
-}
-function land() {
-  const body = currentBody();
-  if (!flight || flight.mode !== 'orbit' || !body) return;
-  if (!body.land) {
-    $('flight-readout').textContent = body.name + ' has no ground to set down on.';
-    return;
-  }
-  flight.mode = 'landed';
-  flight.body = body;
-  document.body.classList.add('letterbox');
-  audio.score('quiet');
-  usage('landed', body.id);
-  if (audio.sfx && audio.sfx.land) audio.sfx.land();
-  renderFlight();
-}
-function openScan() {
-  const body = flight && flight.mode === 'landed' ? flight.body : currentBody();
-  if (!body) return;
-  const scan = scanBody(sys, body.id);
-  if (!scan) return;
-  $('scan').hidden = false;
-  $('scan-card').textContent = [
-    scan.name,
-    'Composition ' + scan.composition,
-    'Density ' + scan.density.toFixed(2) + ' g/cm³',
-    'Temperature ' + Math.round(scan.temperature) + ' K',
-    'Life ' + scan.life,
-    'Biosignature ' + scan.biosignature,
-    'Technosignature ' + scan.technosignature
-  ].join(' · ');
-  usage('scan', body.id);
-  if (audio.sfx && audio.sfx.ping) audio.sfx.ping();
-}
-function openContact() {
-  const state = contactState(sys);
-  $('contact').hidden = false;
-  const card = $('contact-card');
-  if (!state.open) card.textContent = state.reason;
-  else if (state.neighbor) card.textContent = state.neighbor.text + (state.local[0] ? ' ' + state.local[0].body : '');
-  else card.textContent = 'Your civilization can transmit. No answer has arrived.';
-  usage('contact_opened', state.open ? 'open' : 'closed');
-}
-function openCodex(id) {
-  const entry = CODEX.find((c) => c.id === id) || CODEX[0];
-  $('codex').hidden = false;
-  $('codex-title').textContent = entry.title;
-  $('codex-principle').textContent = entry.principle;
-  $('codex-note').textContent = entry.note;
-}
-
-function closeEnough() {
-  const body = currentBody();
-  if (!body || !flight) return false;
-  return Math.hypot(flight.pose.x - body.x, flight.pose.z - body.z) < Math.max(1.4, body.radius * 0.8);
-}
-
-function stepFlight(dt) {
-  if (!flight || flight.mode === 'landed') return;
-  const body = currentBody();
-  if (!body) return;
-  const dx = body.x - flight.pose.x;
-  const dz = body.z - flight.pose.z;
-  const dist = Math.hypot(dx, dz) || 1;
-  flight.pose.heading = Math.atan2(dz, dx);
-  const go = flight.mode === 'cruise' && (keys.KeyW || true);
-  flight.pose.thrust = go ? 1 : 0;
-  if (flight.mode === 'cruise') {
-    const step = Math.min(dist, dt * 14);
-    flight.pose.x += (dx / dist) * step;
-    flight.pose.z += (dz / dist) * step;
-    if (closeEnough()) flight.mode = 'orbit';
-  } else if (flight.mode === 'orbit') {
-    const ang = Math.atan2(flight.pose.z - body.z, flight.pose.x - body.x) + dt * 0.45;
-    const r = Math.max(1.6, body.radius * 0.9);
-    flight.pose.x = body.x + Math.cos(ang) * r;
-    flight.pose.z = body.z + Math.sin(ang) * r;
-    flight.pose.heading = ang + Math.PI / 2;
-  }
-}
-
-$('act-orbit').addEventListener('click', enterOrbit);
-$('act-land').addEventListener('click', land);
-$('act-scan').addEventListener('click', openScan);
-$('act-contact').addEventListener('click', openContact);
-$('act-codex').addEventListener('click', () => openCodex('kepler'));
-$('scan-close').addEventListener('click', () => { $('scan').hidden = true; });
-$('contact-close').addEventListener('click', () => { $('contact').hidden = true; });
-$('codex-close').addEventListener('click', () => { $('codex').hidden = true; });
-$('lift').addEventListener('click', () => {
-  if (!flight) return;
-  flight.mode = 'orbit';
-  document.body.classList.remove('letterbox');
-});
-document.querySelectorAll('[data-codex]').forEach((b) => b.addEventListener('click', () => openCodex(b.getAttribute('data-codex'))));
-addEventListener('odyssey:whoosh', () => { if (audio.sfx && audio.sfx.whoosh) audio.sfx.whoosh(); });
+let flareLock = 0;
+let returnTimer = 0;
 
 function loop(now) {
-  const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+  const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (phase === 'build') spin += dt * 0.04;
-  if (phase === 'flight') {
-    stepFlight(dt);
-    const body = currentBody();
-    if ($('flight-readout') && body && flight.mode !== 'landed') {
-      const dist = Math.hypot(flight.pose.x - body.x, flight.pose.z - body.z);
-      $('flight-readout').textContent = sys.playerShip.name + ' · ' + body.name + ' · ' + dist.toFixed(1) + (flight.mode === 'orbit' ? ' · in orbit' : ' · closing');
-    }
-    view.frame({ phase, flight: { ...flight, body: flight.body || body } }, dt);
-  } else {
-    view.frame({ phase, flight: { mode: 'atelier' } }, dt);
-  }
+  view.frame(dt);
   audio.tick();
+  const dist = document.getElementById('cam-dist');
+  if (dist) dist.textContent = view.distance().toFixed(1);
   requestAnimationFrame(loop);
 }
+requestAnimationFrame(loop);
+window.addEventListener('resize', () => view.resize());
 
-function el(tag, cls, text) {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text) node.textContent = text;
-  return node;
+view.onFlare(() => {
+  const now = performance.now();
+  if (now < flareLock) return;
+  flareLock = now + 4500;
+  audio.swell(2.8);
+});
+
+function unlock() {
+  audio.start();
+  if (!audio.current || audio.current.id !== 'zarathustra') audio.score('open');
 }
-function next(id, label, fn) {
-  const b = el('button', 'primary', label);
-  b.id = id;
-  b.type = 'button';
-  b.addEventListener('click', fn);
-  return b;
+
+function show(el) { el.hidden = false; }
+function hide(el) { el.hidden = true; }
+
+present.addEventListener('pointerdown', (event) => {
+  if (event.target.closest && event.target.closest('#logo-link')) return;
+  present.classList.remove('show');
+  show(title);
+  unlock();
+  if (window.MoodSticker) MoodSticker.screen('title');
+});
+
+document.getElementById('begin').addEventListener('click', () => {
+  unlock();
+  audio.score('quiet');
+  hide(title);
+  show(countStep);
+  if (window.MoodSticker) {
+    MoodSticker.screen('star-count');
+    MoodSticker.usage('star_count');
+  }
+});
+
+function formatL(L) {
+  if (L >= 1000) return Math.round(L).toLocaleString('en-US') + ' L\u2609';
+  if (L >= 10) return L.toFixed(1) + ' L\u2609';
+  if (L >= 0.01) return L.toFixed(2) + ' L\u2609';
+  return L.toExponential(2) + ' L\u2609';
 }
-function slider(label, value, min, max, step, id, unit, fn) {
-  const wrap = el('label', 'slider');
-  const name = el('span', '', label + ' ');
-  const out = el('b', '', Number(value).toFixed(2) + ' ' + unit);
+
+function formatAU(a) {
+  if (a >= 100) return Math.round(a) + ' AU';
+  if (a >= 1) return a.toFixed(2) + ' AU';
+  if (a >= 0.01) return a.toFixed(3) + ' AU';
+  return a.toExponential(2) + ' AU';
+}
+
+function formatRadius(v) {
+  return (v >= 1 ? v.toFixed(2) : v.toExponential(2)) + ' R\u2609';
+}
+
+function paintDerived() {
+  const d = derive(spec);
+  document.getElementById('derived-l').textContent = formatL(d.luminosity);
+  document.getElementById('derived-life').textContent = formatYears(d.lifetime);
+  document.getElementById('derived-hz').textContent = formatAU(d.hz.inner) + ' – ' + formatAU(d.hz.outer);
+  document.getElementById('derived-d').textContent = formatRadius(d.diameter);
+  const extra = document.getElementById('derived-extra');
+  if (d.kind === 'ns') {
+    const g = d.magnetic;
+    extra.textContent = 'Magnetic field 10^' + g.toFixed(1) + ' G' + (g >= 14 ? '. Magnetar-class.' : '.');
+  } else if (d.kind === 'bh') {
+    const hole = d.isco || iscoRadii(d.spin);
+    extra.textContent = 'Spin a = ' + hole.spin.toFixed(2) + '. Innermost stable orbit ' + hole.prograde.toFixed(2) + ' GM/c\u00b2. Horizon ' + hole.horizon.toFixed(2) + ' GM/c\u00b2.';
+  } else extra.textContent = '';
+  const ageNote = document.getElementById('age-note');
+  ageNote.textContent = spec.age > d.lifetime
+    ? 'This age is longer than the stage above. The star would already have changed.'
+    : '';
+  document.getElementById('habit').textContent = starType(spec.type).habitability;
+  view.setStar(Object.assign({}, spec, d));
+  return d;
+}
+
+function slider(id, label, min, max, value, step, format) {
+  const wrap = document.createElement('label');
+  wrap.className = 'slider';
+  const name = document.createElement('span');
+  name.textContent = label;
+  const read = document.createElement('span');
+  read.id = id + '-read';
   const input = document.createElement('input');
   input.type = 'range';
   input.id = id;
@@ -524,21 +132,188 @@ function slider(label, value, min, max, step, id, unit, fn) {
   input.max = String(max);
   input.step = String(step);
   input.value = String(value);
+  const write = () => { read.textContent = format(Number(input.value)); };
+  write();
   input.addEventListener('input', () => {
-    const v = Number(input.value);
-    out.textContent = v.toFixed(2) + ' ' + unit;
-    fn(v);
-    view.place(sys, spin);
-    save();
+    spec[input.dataset.key] = Number(input.value);
+    write();
+    paintDerived();
   });
-  wrap.append(name, out, input);
-  return wrap;
+  wrap.append(name, read, input);
+  return { wrap, input };
 }
 
-$('step-stars').addEventListener('click', () => { step = 'stars'; renderStep(); });
-$('step-worlds').addEventListener('click', () => { step = 'worlds'; renderStep(); });
-$('step-moons').addEventListener('click', () => { step = 'moons'; renderStep(); });
-$('step-awaken').addEventListener('click', () => { step = 'awaken'; renderStep(); });
-$('codex-brand').innerHTML = 'Explore more worlds at ' + word();
-requestAnimationFrame(loop);
-setInterval(() => { if (phase === 'build') view.place(sys, spin); }, 900);
+function mountFeatures(type) {
+  const box = document.getElementById('sliders');
+  box.textContent = '';
+  const massStep = type.mass[1] - type.mass[0] > 5 ? 0.1 : 0.01;
+  const radSpan = type.radius[1] - type.radius[0];
+  const radStep = radSpan > 5 ? 0.1 : radSpan > 0.2 ? 0.01 : radSpan / 100;
+  const rows = [
+    ['feat-mass', 'Mass', type.mass[0], type.mass[1], spec.mass, massStep, (v) => v.toFixed(v >= 10 ? 1 : 2) + ' M\u2609', 'mass'],
+    ['feat-radius', 'Radius', type.radius[0], type.radius[1], spec.radius, radStep, formatRadius, 'radius'],
+    ['feat-teff', type.kind === 'bh' ? 'Disk temperature' : 'Temperature', type.teff[0], type.teff[1], spec.teff, Math.max(1, (type.teff[1] - type.teff[0]) / 200), (v) => Math.round(v).toLocaleString('en-US') + ' K', 'teff'],
+    ['feat-age', 'Age', 0, Math.max(spec.age * 2, type.kind === 'ms' ? 1.2e10 : 2e9), spec.age, Math.max(spec.age, 1e6) / 200, (v) => formatYears(v), 'age'],
+    ['feat-z', 'Metallicity', 0.1, 3, spec.metallicity, 0.05, (v) => v.toFixed(2) + ' Z\u2609', 'metallicity'],
+    ['feat-rot', 'Rotation', type.kind === 'ns' ? 0.01 : 0.4, type.kind === 'ns' ? 20 : 80, spec.rotation, type.kind === 'ns' ? 0.01 : 0.1, (v) => v.toFixed(v < 1 ? 2 : 1) + ' days', 'rotation'],
+    ['feat-activity', 'Solar activity', 0, 1, spec.activity, 0.01, (v) => v < 0.2 ? 'Quiet' : v < 0.45 ? 'Mild' : v < 0.7 ? 'Active' : 'Very active', 'activity']
+  ];
+  if (type.kind === 'ns') {
+    rows.push(['feat-mag', 'Magnetic field', 8, 15, spec.magnetic, 0.1, (v) => '10^' + v.toFixed(1) + ' G', 'magnetic']);
+  }
+  if (type.kind === 'bh') {
+    rows.push(['feat-spin', 'Spin', 0, 0.998, spec.spin, 0.001, (v) => v.toFixed(3), 'spin']);
+  }
+  rows.forEach(([id, label, min, max, value, step, format, key]) => {
+    const builtSlider = slider(id, label, min, max, value, step, format);
+    builtSlider.input.dataset.key = key;
+    box.append(builtSlider.wrap);
+  });
+}
+
+function selectType(id) {
+  spec = defaultsFor(id);
+  menu.querySelectorAll('.star-card').forEach((card) => {
+    card.classList.toggle('on', card.dataset.type === id);
+  });
+  const type = starType(id);
+  document.getElementById('star-name').textContent = type.title;
+  mountFeatures(type);
+  features.hidden = false;
+  paintDerived();
+  if (window.MoodSticker) MoodSticker.usage('star_pick', { type: id });
+}
+
+const SVG = 'http://www.w3.org/2000/svg';
+function el(name, attrs) {
+  const node = document.createElementNS(SVG, name);
+  Object.keys(attrs).forEach((key) => node.setAttribute(key, attrs[key]));
+  return node;
+}
+
+function glyph(type) {
+  const svg = el('svg', { viewBox: '0 0 80 80', class: 'glyph glyph-' + type.id, 'aria-hidden': 'true' });
+  if (type.kind === 'bh') {
+    svg.append(el('ellipse', { class: 'disk', cx: '40', cy: '44', rx: '30', ry: '10', fill: '#ffb15a', opacity: '0.9' }));
+    svg.append(el('circle', { class: 'lens', cx: '40', cy: '40', r: '16', fill: 'none', stroke: '#fff6e8', 'stroke-width': '1.6' }));
+    svg.append(el('circle', { class: 'hole', cx: '40', cy: '40', r: '7', fill: '#050505', stroke: '#c9b8a2', 'stroke-width': '0.8' }));
+    return svg;
+  }
+  if (type.kind === 'ns') {
+    svg.append(el('polygon', { class: 'beams', points: '40,6 43,34 40,74 37,34', fill: '#d7e8ff' }));
+    svg.append(el('polygon', { class: 'beams', points: '8,40 34,37 72,40 34,43', fill: '#9eb6ff', opacity: '0.7' }));
+    svg.append(el('circle', { class: 'core', cx: '40', cy: '40', r: '4', fill: '#f4f7ff' }));
+    return svg;
+  }
+  if (type.kind === 'wd') {
+    svg.append(el('circle', { class: 'glow', cx: '40', cy: '40', r: '14', fill: type.color, opacity: '0.35' }));
+    svg.append(el('circle', { class: 'photosphere', cx: '40', cy: '40', r: '5', fill: '#f7fbff' }));
+    return svg;
+  }
+  const span = type.kind === 'giant' ? 34 : Math.max(11, Math.min(26, 8 + type.radius[1] * 1.6));
+  svg.append(el('circle', { class: 'photosphere', cx: '40', cy: '40', r: String(span), fill: type.color }));
+  svg.append(el('circle', { cx: '34', cy: '32', r: String(span * 0.28), fill: '#fff', opacity: '0.55' }));
+  return svg;
+}
+
+STAR_TYPES.forEach((type) => {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'star-card';
+  card.dataset.type = type.id;
+  card.dataset.kind = type.kind;
+  const name = document.createElement('strong');
+  name.textContent = type.title;
+  const fact = document.createElement('span');
+  const kelvin = (t) => t >= 1e6 ? (t / 1e6).toFixed(1).replace(/\.0$/, '') + ' million K' : Math.round(t).toLocaleString('en-US') + ' K';
+  fact.textContent = kelvin(type.teff[0]).replace(' K', '') + '–' + kelvin(type.teff[1]);
+  card.append(glyph(type), name, fact);
+  card.addEventListener('click', () => selectType(type.id));
+  menu.append(card);
+});
+
+function beginStar(index) {
+  spec = null;
+  features.hidden = true;
+  menu.querySelectorAll('.star-card').forEach((card) => card.classList.remove('on'));
+  const which = document.getElementById('which');
+  which.textContent = starCount === 1 ? 'Choose the star' : 'Star ' + (index + 1) + ' of ' + starCount;
+  document.getElementById('confirm-star').textContent = index + 1 < starCount ? 'Next star' : 'Confirm star';
+  hide(countStep);
+  hide(next);
+  show(studio);
+}
+
+function finish() {
+  const sys = designSystem(built);
+  view.setSystem(sys);
+  document.getElementById('next-copy').textContent = sys.note + ' Next: planets (coming soon).';
+  pathsBtn.hidden = sys.count < 2;
+  pathsBtn.setAttribute('aria-pressed', 'true');
+  pathsBtn.textContent = 'Orbits on';
+  view.setPaths(true);
+  hide(studio);
+  hide(countStep);
+  show(next);
+  try { localStorage.setItem(KEY, JSON.stringify({ count: sys.count, architecture: sys.architecture, stars: built, note: sys.note })); } catch (err) { /* private mode */ }
+  audio.score('launch');
+  clearTimeout(returnTimer);
+  returnTimer = setTimeout(() => { if (audio.cue === 'launch') audio.score('quiet'); }, 8000);
+  if (window.MoodSticker) {
+    MoodSticker.screen('system');
+    MoodSticker.usage('system_set', { count: sys.count });
+  }
+}
+
+document.querySelectorAll('.count-card').forEach((card) => {
+  card.addEventListener('click', () => {
+    starCount = Number(card.dataset.count);
+    built = [];
+    card.parentElement.querySelectorAll('.count-card').forEach((c) => c.classList.toggle('on', c === card));
+    if (window.MoodSticker) MoodSticker.usage('star_count_pick', { count: starCount });
+    if (starCount === 0) finish();
+    else beginStar(0);
+  });
+});
+
+document.getElementById('confirm-star').addEventListener('click', () => {
+  if (!spec) return;
+  const d = paintDerived();
+  built.push(Object.assign({}, spec, d));
+  if (built.length < starCount) beginStar(built.length);
+  else finish();
+});
+
+document.getElementById('zoom-in').addEventListener('click', () => view.zoomBy(0.82));
+document.getElementById('zoom-out').addEventListener('click', () => view.zoomBy(1.18));
+
+pathsBtn.addEventListener('click', () => {
+  const on = pathsBtn.getAttribute('aria-pressed') !== 'true';
+  pathsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  pathsBtn.textContent = on ? 'Orbits on' : 'Orbits off';
+  view.setPaths(on);
+});
+
+const mute = document.getElementById('mute');
+mute.addEventListener('click', () => {
+  audio.toggleMuted();
+  mute.setAttribute('aria-pressed', audio.muted ? 'true' : 'false');
+  mute.textContent = audio.muted ? 'Sound on' : 'Mute';
+});
+
+const creditList = document.getElementById('credit-list');
+audio.tracks.forEach((track) => {
+  const item = document.createElement('li');
+  const link = document.createElement('a');
+  link.href = track.page;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = track.composer + ' — ' + track.piece;
+  const meta = document.createElement('span');
+  meta.textContent = track.performer + '. ' + track.license + '.';
+  item.append(link, meta);
+  creditList.append(item);
+});
+
+document.getElementById('credits-open').addEventListener('click', () => { credits.hidden = false; });
+document.getElementById('credits-close').addEventListener('click', () => { credits.hidden = true; });

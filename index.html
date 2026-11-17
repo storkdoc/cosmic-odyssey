@@ -10,8 +10,6 @@
 </head>
 <body class="cinema">
   <canvas id="view"></canvas>
-  <div class="letter top"></div>
-  <div class="letter bot"></div>
 
   <a id="sp-mark" class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener" aria-label="SavagePlanets">
     <img class="brand mark" src="assets/brand/savageplanets-mark.png" width="512" height="512" alt="SavagePlanets">
@@ -19,7 +17,9 @@
 
   <section id="present" class="show">
     <figure id="present-logo">
-      <img class="brand wordmark" src="assets/brand/savageplanets-logo.png" width="588" height="420" alt="SavagePlanets">
+      <a id="logo-link" href="https://savageplanets.com" target="_blank" rel="noopener">
+        <img class="brand wordmark" src="assets/brand/savageplanets-logo.png" width="588" height="420" alt="SavagePlanets">
+      </a>
     </figure>
     <p>presents</p>
   </section>
@@ -27,90 +27,76 @@
   <section id="title" hidden>
     <h1 class="word">COSMIC ODYSSEY</h1>
     <p class="by">by Steve Behram</p>
-    <p class="ded">A gift for the backers who were let down. Build a solar system, and see what the physics allows.</p>
+    <p class="ded">A gift for the backers who were let down. Choose how many suns, then set each fire.</p>
     <p class="free">Free forever. No purchases, no ads.</p>
     <p class="presented">Presented with <span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span></p>
     <div class="actions">
-      <button class="primary" id="begin" type="button">Begin the voyage</button>
+      <button class="primary" id="begin" type="button">Begin</button>
     </div>
   </section>
 
-  <section id="atelier" hidden>
-    <nav class="steps" aria-label="System builder">
-      <button type="button" id="step-stars" class="on">Stars</button>
-      <button type="button" id="step-worlds">Worlds</button>
-      <button type="button" id="step-moons">Moons</button>
-      <button type="button" id="step-awaken">Awaken</button>
-    </nav>
-    <figure id="gate">
-      <img id="gate-mark" class="brand mark" src="assets/brand/savageplanets-mark.png" width="512" height="512" alt="SavagePlanets">
-      <figcaption><span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span></figcaption>
-    </figure>
-    <div class="sheet" id="step"></div>
-    <p class="foot">Read the free comic at <a class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener"><span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span></a>.</p>
+  <section id="count" hidden>
+    <div class="sheet star-sheet">
+      <p class="kicker">The system</p>
+      <h2>How many stars will your system have?</h2>
+      <div id="count-choices" class="count-menu">
+        <button type="button" class="count-card" data-count="0"><span class="count-art art-0" aria-hidden="true"></span><strong>None</strong><span>A rogue, starless system</span></button>
+        <button type="button" class="count-card" data-count="1"><span class="count-art art-1" aria-hidden="true"></span><strong>One</strong><span>A single star</span></button>
+        <button type="button" class="count-card" data-count="2"><span class="count-art art-2" aria-hidden="true"></span><strong>Two</strong><span>A stable binary</span></button>
+        <button type="button" class="count-card" data-count="3"><span class="count-art art-3" aria-hidden="true"></span><strong>Three</strong><span>A hierarchical triple</span></button>
+      </div>
+    </div>
   </section>
 
-  <section id="evolve" hidden>
+  <section id="studio" hidden>
+    <div class="sheet star-sheet">
+      <p class="kicker">Sun selection</p>
+      <h2 id="which">Choose the star</h2>
+      <div id="star-menu" class="star-menu"></div>
+      <div id="features" hidden>
+        <h2 id="star-name"></h2>
+        <p id="habit" class="note"></p>
+        <div id="sliders"></div>
+        <p class="physics" id="derived">
+          Diameter <span id="derived-d"></span>.
+          Luminosity <span id="derived-l"></span>.
+          Lifetime <span id="derived-life"></span>.
+          Habitable zone <span id="derived-hz"></span>.
+        </p>
+        <p id="derived-extra" class="note"></p>
+        <p id="age-note" class="warn"></p>
+        <button class="primary" id="confirm-star" type="button">Confirm star</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="next" hidden>
     <div class="sheet center">
-      <p class="kicker">Ages</p>
-      <h2>Life finds a solvent, or it does not</h2>
-      <p id="life-card"></p>
-      <button type="button" class="primary" id="launch">Launch the survey craft</button>
+      <p class="kicker">Star set</p>
+      <h2>The fire is chosen</h2>
+      <p id="next-copy">Next: planets (coming soon).</p>
     </div>
   </section>
 
-  <section id="flight-hud" hidden>
-    <figure id="ship-card">
-      <img src="assets/art/ship-side.png" width="1280" height="720" alt="Survey craft, side view. Rendered for Cosmic Odyssey.">
-    </figure>
-    <div class="readout" id="flight-readout"></div>
-    <p id="ship-blurb"></p>
-    <div class="targets" id="targets"></div>
-    <div class="pad">
-      <button type="button" id="act-orbit">Orbit</button>
-      <button type="button" id="act-land">Land</button>
-      <button type="button" id="act-scan">Scan</button>
-      <button type="button" id="act-contact">Contact</button>
-      <button type="button" id="act-codex">Codex</button>
-      <button type="button" id="lift">Lift</button>
-    </div>
-    <div class="codex-row">
-      <button type="button" data-codex="kepler">Kepler</button>
-      <button type="button" data-codex="hz">Zone</button>
-      <button type="button" data-codex="roche">Roche</button>
-      <button type="button" data-codex="light">Light-time</button>
-      <button type="button" data-codex="life">Solvents</button>
-    </div>
-  </section>
-
-  <section id="scan" hidden>
+  <section id="credits" hidden>
     <div class="sheet">
-      <p class="kicker">Sensors</p>
-      <h2>Composition, density, temperature, life</h2>
-      <p id="scan-card"></p>
-      <button type="button" id="scan-close">Close</button>
+      <p class="kicker">Music</p>
+      <h2>Recorded orchestra</h2>
+      <p class="note">Zarathustra opens the starfield. Venus stays under the star menu. Jupiter marks the moment a star is confirmed. A flare swells the piece already playing. Nothing in the score is synthesized.</p>
+      <ul id="credit-list"></ul>
+      <p class="note">Sky: NASA SVS Deep Star Maps 2020, Ernie Wright (USRA), public domain. The small starfield image is only a faint tint.</p>
+      <button type="button" id="credits-close">Close</button>
     </div>
   </section>
 
-  <section id="contact" hidden>
-    <div class="sheet">
-      <p class="kicker">Contact</p>
-      <h2>A signal is an arrival</h2>
-      <p id="contact-card"></p>
-      <button type="button" id="contact-close">Close</button>
-    </div>
-  </section>
-
-  <section id="codex" hidden>
-    <div class="sheet">
-      <p class="kicker">Codex</p>
-      <h2 id="codex-title"></h2>
-      <p id="codex-principle"></p>
-      <p id="codex-note"></p>
-      <p><a id="codex-brand" class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener"></a></p>
-      <button type="button" id="codex-close">Keep the page</button>
-    </div>
-  </section>
+  <div id="tools">
+    <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+    <span id="cam-dist">7.2</span>
+    <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+    <button type="button" id="paths" hidden aria-pressed="true">Orbits on</button>
+    <button type="button" id="mute" aria-pressed="false">Mute</button>
+    <button type="button" id="credits-open">Credits</button>
+  </div>
 
   <script src="js/mood-sticker.js"></script>
   <script type="module" src="js/odyssey/app.js"></script>

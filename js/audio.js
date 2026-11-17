@@ -106,7 +106,24 @@ export function createAudio(rand = Math.random) {
   let fade = null;
 
   function href(track) { return new URL(track.file, document.baseURI).href; }
-  function level() { return api.muted ? 0 : Math.max(0, Math.min(1, api.volume)); }
+  /* Brass openings sit louder than the Venus band on the same file gain.
+     Per-piece gain keeps one user volume from blasting Zarathustra or burying Venus. */
+  const BALANCE = { zarathustra: 0.52, jupiter: 0.64, venus: 0.82, mercury: 0.72, dvorak: 0.58, valkyrie: 0.5 };
+  let swell = null;
+  function level() {
+    const id = api.current && api.current.id;
+    const piece = BALANCE[id] || 0.65;
+    return api.muted ? 0 : Math.max(0, Math.min(1, api.volume * piece));
+  }
+  function swellMul() {
+    if (!swell) return 1;
+    const u = (performance.now() - swell.t0) / swell.dur;
+    if (u >= 1) { swell = null; return 1; }
+    const env = u < 0.12 ? u / 0.12 : u > 0.62 ? (1 - u) / 0.38 : 1;
+    return 1 + 0.38 * env;
+  }
+  function audible() { return Math.min(1, level() * swellMul()); }
+  api.swell = (seconds = 2.6) => { swell = { t0: performance.now(), dur: Math.max(0.4, seconds) * 1000 }; };
   api.sfx = { ui() {}, probe() {}, burn() {}, ping() {}, warn() {} };
 
   function assign(el, track) {
@@ -116,14 +133,14 @@ export function createAudio(rand = Math.random) {
   assign(shown, api.current);
   assign(hidden, byId('venus'));
 
-  api.setVolume = (v) => { api.volume = Math.max(0, Math.min(1, v)); if (!fade) shown.volume = level(); };
-  api.setMuted = (m) => { api.muted = !!m; if (!fade) shown.volume = level(); };
+  api.setVolume = (v) => { api.volume = Math.max(0, Math.min(1, v)); if (!fade) shown.volume = audible(); };
+  api.setMuted = (m) => { api.muted = !!m; if (!fade) shown.volume = audible(); };
   api.toggleMuted = () => api.setMuted(!api.muted);
 
   api.start = () => {
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* older browsers */ }
     api.unlocked = true;
-    shown.volume = level();
+    shown.volume = audible();
     hidden.volume = 0;
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -202,18 +219,19 @@ export function createAudio(rand = Math.random) {
   function fadeStep() {
     if (!fade) return;
     const u = Math.min(1, (performance.now() - fade.t0) / fade.dur);
-    const target = level();
+    const target = audible();
     fade.to.volume = target * u;
     fade.from.volume = target * (1 - u);
     if (u >= 1) {
       try { fade.from.pause(); } catch (e) { /* ignore */ }
       fade = null;
-      shown.volume = level();
+      shown.volume = audible();
     }
   }
 
   api.tick = () => {
     fadeStep();
+    if (!fade && api.unlocked) shown.volume = audible();
     if (!api.unlocked || api.muted) return;
     if (shown.ended) {
       if (api.cue === 'flight') api.score('flight');
