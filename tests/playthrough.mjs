@@ -40,7 +40,26 @@ async function assertBrand(page) {
     throw new Error('logo clipped by the viewport ' + JSON.stringify({ box, vp }));
   }
   const ratio = box.width / box.height;
-  if (Math.abs(ratio - (588 / 420)) > 0.05) throw new Error('wordmark stretched ' + ratio.toFixed(3));
+  if (Math.abs(ratio - (588 / 420)) > 0.015) throw new Error('wordmark not at 588:420, ratio ' + ratio.toFixed(4) + ' box ' + box.width.toFixed(1) + 'x' + box.height.toFixed(1));
+  const clip = await logo.evaluate((img) => {
+    const problems = [];
+    if (img.scrollHeight > img.clientHeight + 1) problems.push('img scrollHeight ' + img.scrollHeight + ' > clientHeight ' + img.clientHeight);
+    const r = img.getBoundingClientRect();
+    const clips = (v) => v === 'hidden' || v === 'clip' || v === 'auto' || v === 'scroll';
+    let el = img.parentElement;
+    while (el) {
+      const s = getComputedStyle(el);
+      if (clips(s.overflow) || clips(s.overflowX) || clips(s.overflowY)) {
+        const a = el.getBoundingClientRect();
+        if (r.top < a.top - 1 || r.bottom > a.bottom + 1 || r.left < a.left - 1 || r.right > a.right + 1) {
+          problems.push((el.id || el.tagName) + ' ' + s.overflow + '/' + s.overflowY + ' clips the wordmark');
+        }
+      }
+      el = el.parentElement;
+    }
+    return problems;
+  });
+  if (clip.length) throw new Error(clip.join('; '));
   const mark = page.locator('#sp-mark img.brand.mark');
   const m = await mark.evaluate((el) => ({ w: el.naturalWidth, h: el.naturalHeight, alt: el.alt }));
   if (m.w !== 512 || m.h !== 512 || m.alt !== 'SavagePlanets') throw new Error('corner mark ' + JSON.stringify(m));
@@ -118,6 +137,24 @@ const browser = await chromium.launch({
 });
 let failed = 0;
 try {
+  for (const [name, contextOptions] of [
+    ['logo-390x844', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true }],
+    ['logo-375x667', { viewport: { width: 375, height: 667 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true }],
+    ['logo-390x664', { viewport: { width: 390, height: 664 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true }]
+  ]) {
+    const context = await browser.newContext(contextOptions);
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    try {
+      await page.waitForSelector('#present.show img.wordmark');
+      await assertBrand(page);
+      console.log(name, 'PASS');
+    } catch (err) {
+      failed++;
+      console.log(name, 'FAIL', err.message.split('\n')[0]);
+    }
+    await context.close();
+  }
   for (const [name, contextOptions] of [
     ['desktop', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }],
     ['iphone', { ...devices['iPhone 13'], hasTouch: true, deviceScaleFactor: 3 }],
