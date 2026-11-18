@@ -5,8 +5,6 @@ import { designSystem } from './systems.js';
 import { createAudio } from '../audio.js';
 
 const KEY = 'cosmic-odyssey.star';
-const present = document.getElementById('present');
-const title = document.getElementById('title');
 const countStep = document.getElementById('count');
 const studio = document.getElementById('studio');
 const features = document.getElementById('features');
@@ -21,7 +19,7 @@ audio.setVolume(1);
 
 if (window.MoodSticker) {
   MoodSticker.game('cosmic-odyssey');
-  MoodSticker.screen('present');
+  MoodSticker.screen('star-count');
 }
 
 let spec = null;
@@ -55,27 +53,10 @@ function unlock() {
   if (!audio.current || audio.current.id !== 'zarathustra') audio.score('open');
 }
 
+document.addEventListener('pointerdown', () => { unlock(); }, { once: true });
+
 function show(el) { el.hidden = false; }
 function hide(el) { el.hidden = true; }
-
-present.addEventListener('pointerdown', (event) => {
-  if (event.target.closest && event.target.closest('#logo-link')) return;
-  present.classList.remove('show');
-  show(title);
-  unlock();
-  if (window.MoodSticker) MoodSticker.screen('title');
-});
-
-document.getElementById('begin').addEventListener('click', () => {
-  unlock();
-  audio.score('quiet');
-  hide(title);
-  show(countStep);
-  if (window.MoodSticker) {
-    MoodSticker.screen('star-count');
-    MoodSticker.usage('star_count');
-  }
-});
 
 function formatL(L) {
   if (L >= 1000) return Math.round(L).toLocaleString('en-US') + ' L\u2609';
@@ -101,6 +82,21 @@ function paintDerived() {
   document.getElementById('derived-life').textContent = formatYears(d.lifetime);
   document.getElementById('derived-hz').textContent = formatAU(d.hz.inner) + ' – ' + formatAU(d.hz.outer);
   document.getElementById('derived-d').textContent = formatRadius(d.diameter);
+  document.getElementById('derived-r').textContent = formatRadius(d.radius);
+  document.getElementById('derived-t').textContent = Math.round(d.teff).toLocaleString('en-US') + ' K';
+  const badge = document.getElementById('type-badge');
+  badge.textContent = starType(d.type).title;
+  badge.dataset.type = d.type;
+  spec.age = d.age;
+  spec.radius = d.radius;
+  spec.teff = d.teff;
+  const ageInput = document.getElementById('feat-age');
+  if (ageInput) {
+    ageInput.max = String(Math.max(d.lifetime, 1));
+    ageInput.value = String(d.age);
+    const ageRead = document.getElementById('feat-age-read');
+    if (ageRead) ageRead.textContent = formatYears(d.age);
+  }
   const extra = document.getElementById('derived-extra');
   if (d.kind === 'ns') {
     const g = d.magnetic;
@@ -147,12 +143,8 @@ function mountFeatures(type) {
   const box = document.getElementById('sliders');
   box.textContent = '';
   const massStep = type.mass[1] - type.mass[0] > 5 ? 0.1 : 0.01;
-  const radSpan = type.radius[1] - type.radius[0];
-  const radStep = radSpan > 5 ? 0.1 : radSpan > 0.2 ? 0.01 : radSpan / 100;
   const rows = [
     ['feat-mass', 'Mass', type.mass[0], type.mass[1], spec.mass, massStep, (v) => v.toFixed(v >= 10 ? 1 : 2) + ' M\u2609', 'mass'],
-    ['feat-radius', 'Radius', type.radius[0], type.radius[1], spec.radius, radStep, formatRadius, 'radius'],
-    ['feat-teff', type.kind === 'bh' ? 'Disk temperature' : 'Temperature', type.teff[0], type.teff[1], spec.teff, Math.max(1, (type.teff[1] - type.teff[0]) / 200), (v) => Math.round(v).toLocaleString('en-US') + ' K', 'teff'],
     ['feat-age', 'Age', 0, Math.max(spec.age * 2, type.kind === 'ms' ? 1.2e10 : 2e9), spec.age, Math.max(spec.age, 1e6) / 200, (v) => formatYears(v), 'age'],
     ['feat-z', 'Metallicity', 0.1, 3, spec.metallicity, 0.05, (v) => v.toFixed(2) + ' Z\u2609', 'metallicity'],
     ['feat-rot', 'Rotation', type.kind === 'ns' ? 0.01 : 0.4, type.kind === 'ns' ? 20 : 80, spec.rotation, type.kind === 'ns' ? 0.01 : 0.1, (v) => v.toFixed(v < 1 ? 2 : 1) + ' days', 'rotation'],
@@ -177,44 +169,13 @@ function selectType(id) {
     card.classList.toggle('on', card.dataset.type === id);
   });
   const type = starType(id);
-  document.getElementById('star-name').textContent = type.title;
   mountFeatures(type);
   features.hidden = false;
   paintDerived();
   if (window.MoodSticker) MoodSticker.usage('star_pick', { type: id });
 }
 
-const SVG = 'http://www.w3.org/2000/svg';
-function el(name, attrs) {
-  const node = document.createElementNS(SVG, name);
-  Object.keys(attrs).forEach((key) => node.setAttribute(key, attrs[key]));
-  return node;
-}
-
-function glyph(type) {
-  const svg = el('svg', { viewBox: '0 0 80 80', class: 'glyph glyph-' + type.id, 'aria-hidden': 'true' });
-  if (type.kind === 'bh') {
-    svg.append(el('ellipse', { class: 'disk', cx: '40', cy: '44', rx: '30', ry: '10', fill: '#ffb15a', opacity: '0.9' }));
-    svg.append(el('circle', { class: 'lens', cx: '40', cy: '40', r: '16', fill: 'none', stroke: '#fff6e8', 'stroke-width': '1.6' }));
-    svg.append(el('circle', { class: 'hole', cx: '40', cy: '40', r: '7', fill: '#050505', stroke: '#c9b8a2', 'stroke-width': '0.8' }));
-    return svg;
-  }
-  if (type.kind === 'ns') {
-    svg.append(el('polygon', { class: 'beams', points: '40,6 43,34 40,74 37,34', fill: '#d7e8ff' }));
-    svg.append(el('polygon', { class: 'beams', points: '8,40 34,37 72,40 34,43', fill: '#9eb6ff', opacity: '0.7' }));
-    svg.append(el('circle', { class: 'core', cx: '40', cy: '40', r: '4', fill: '#f4f7ff' }));
-    return svg;
-  }
-  if (type.kind === 'wd') {
-    svg.append(el('circle', { class: 'glow', cx: '40', cy: '40', r: '14', fill: type.color, opacity: '0.35' }));
-    svg.append(el('circle', { class: 'photosphere', cx: '40', cy: '40', r: '5', fill: '#f7fbff' }));
-    return svg;
-  }
-  const span = type.kind === 'giant' ? 34 : Math.max(11, Math.min(26, 8 + type.radius[1] * 1.6));
-  svg.append(el('circle', { class: 'photosphere', cx: '40', cy: '40', r: String(span), fill: type.color }));
-  svg.append(el('circle', { cx: '34', cy: '32', r: String(span * 0.28), fill: '#fff', opacity: '0.55' }));
-  return svg;
-}
+const previewCanvases = [];
 
 STAR_TYPES.forEach((type) => {
   const card = document.createElement('button');
@@ -227,10 +188,20 @@ STAR_TYPES.forEach((type) => {
   const fact = document.createElement('span');
   const kelvin = (t) => t >= 1e6 ? (t / 1e6).toFixed(1).replace(/\.0$/, '') + ' million K' : Math.round(t).toLocaleString('en-US') + ' K';
   fact.textContent = kelvin(type.teff[0]).replace(' K', '') + '–' + kelvin(type.teff[1]);
-  card.append(glyph(type), name, fact);
+  const mini = document.createElement('canvas');
+  mini.className = 'mini';
+  mini.width = 128;
+  mini.height = 128;
+  previewCanvases.push(mini);
+  card.append(mini, name, fact);
+  card.addEventListener('pointerenter', () => {
+    const preview = Object.assign(defaultsFor(type.id), derive(defaultsFor(type.id)));
+    view.setStar(preview);
+  });
   card.addEventListener('click', () => selectType(type.id));
   menu.append(card);
 });
+view.bindPreviews(previewCanvases);
 
 function beginStar(index) {
   spec = null;
@@ -242,6 +213,8 @@ function beginStar(index) {
   hide(countStep);
   hide(next);
   show(studio);
+  unlock();
+  audio.score('quiet');
 }
 
 function finish() {
@@ -298,7 +271,7 @@ const mute = document.getElementById('mute');
 mute.addEventListener('click', () => {
   audio.toggleMuted();
   mute.setAttribute('aria-pressed', audio.muted ? 'true' : 'false');
-  mute.textContent = audio.muted ? 'Sound on' : 'Mute';
+  mute.setAttribute('aria-label', audio.muted ? 'Sound on' : 'Mute');
 });
 
 const creditList = document.getElementById('credit-list');

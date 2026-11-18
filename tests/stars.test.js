@@ -1,4 +1,4 @@
-import { derive, defaultsFor, starType, flareIntervalSeconds, mainSequenceLuminosity, iscoRadii } from '../js/odyssey/stars.js';
+import { derive, defaultsFor, starType, flareIntervalSeconds, mainSequenceLuminosity, iscoRadii, STAR_TYPES } from '../js/odyssey/stars.js';
 
 let fails = 0;
 const check = (ok, msg) => { if (!ok) fails++; console.log(ok ? '  PASS' : '  FAIL', msg); };
@@ -21,6 +21,16 @@ const giantStar = derive(Object.assign({}, defaultsFor('o'), { mass: 40, radius:
 check(giantStar.luminosity > 10000, 'a hot O star is enormously luminous ' + giantStar.luminosity);
 check(giantStar.lifetime < 2e7, 'that O star lives only millions of years ' + giantStar.lifetime);
 check(Math.abs(mainSequenceLuminosity(1) - 1) < 1e-6, 'mass-luminosity is 1 at 1 solar mass');
+
+for (const type of STAR_TYPES) {
+  for (const mass of [type.mass[0], (type.mass[0] + type.mass[1]) / 2, type.mass[1]]) {
+    const d = derive({ type: type.id, mass, age: 1e20, teff: 9e9, radius: 9e9, activity: 1 });
+    check(d.type === type.id, type.id + ' stays its type at mass ' + mass);
+    check(d.mass >= type.mass[0] && d.mass <= type.mass[1], type.id + ' mass stays in range');
+    check(d.teff >= type.teff[0] - 0.5 && d.teff <= type.teff[1] + 0.5, type.id + ' temperature stays in type ' + d.teff);
+    if (type.kind !== 'bh') check(d.radius >= type.radius[0] * 0.999 && d.radius <= type.radius[1] * 1.001, type.id + ' radius stays in type ' + d.radius);
+  }
+}
 
 const hole = derive(defaultsFor('bh'));
 check(hole.kind === 'bh' && hole.hz.outer > hole.hz.inner, 'a black hole still reports a disk-light zone');

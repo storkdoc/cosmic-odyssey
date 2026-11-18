@@ -8,39 +8,18 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23E03A3A' stroke-width='1.5'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body class="cinema">
+<body>
   <canvas id="view"></canvas>
 
-  <a id="sp-mark" class="sp-link" href="https://savageplanets.com" target="_blank" rel="noopener" aria-label="SavagePlanets">
+  <a id="sp-mark" href="https://savageplanets.com" target="_blank" rel="noopener" aria-label="SavagePlanets">
     <img class="brand mark" src="assets/brand/savageplanets-mark.png" width="512" height="512" alt="SavagePlanets">
   </a>
 
-  <section id="present" class="show">
-    <figure id="present-logo">
-      <a id="logo-link" href="https://savageplanets.com" target="_blank" rel="noopener">
-        <img class="brand wordmark" src="assets/brand/savageplanets-logo.png" width="588" height="420" alt="SavagePlanets">
-      </a>
-    </figure>
-    <p>presents</p>
-  </section>
-
-  <section id="title" hidden>
-    <h1 class="word">COSMIC ODYSSEY</h1>
-    <p class="by">by Steve Behram</p>
-    <p class="ded">A gift for the backers who were let down. Choose how many suns, then set each fire.</p>
-    <p class="free">Free forever. No purchases, no ads.</p>
-    <p class="presented">Presented with <span class="sp-word" aria-label="SavagePlanets">Savage<span>Planets</span></span></p>
-    <div class="actions">
-      <button class="primary" id="begin" type="button">Begin</button>
-    </div>
-  </section>
-
-  <section id="count" hidden>
-    <div class="sheet star-sheet">
-      <p class="kicker">The system</p>
+  <section id="count">
+    <div class="sheet">
       <h2>How many stars will your system have?</h2>
       <div id="count-choices" class="count-menu">
-        <button type="button" class="count-card" data-count="0"><span class="count-art art-0" aria-hidden="true"></span><strong>None</strong><span>A rogue, starless system</span></button>
+        <button type="button" class="count-card" data-count="0"><span class="count-art art-0" aria-hidden="true"></span><strong>None</strong><span>Rogue, starless</span></button>
         <button type="button" class="count-card" data-count="1"><span class="count-art art-1" aria-hidden="true"></span><strong>One</strong><span>A single star</span></button>
         <button type="button" class="count-card" data-count="2"><span class="count-art art-2" aria-hidden="true"></span><strong>Two</strong><span>A stable binary</span></button>
         <button type="button" class="count-card" data-count="3"><span class="count-art art-3" aria-hidden="true"></span><strong>Three</strong><span>A hierarchical triple</span></button>
@@ -49,15 +28,16 @@
   </section>
 
   <section id="studio" hidden>
-    <div class="sheet star-sheet">
-      <p class="kicker">Sun selection</p>
+    <div class="sheet">
       <h2 id="which">Choose the star</h2>
       <div id="star-menu" class="star-menu"></div>
       <div id="features" hidden>
-        <h2 id="star-name"></h2>
+        <p id="type-badge" class="badge" data-type=""></p>
         <p id="habit" class="note"></p>
         <div id="sliders"></div>
         <p class="physics" id="derived">
+          Radius <span id="derived-r"></span>.
+          Temperature <span id="derived-t"></span>.
           Diameter <span id="derived-d"></span>.
           Luminosity <span id="derived-l"></span>.
           Lifetime <span id="derived-life"></span>.
@@ -71,20 +51,18 @@
   </section>
 
   <section id="next" hidden>
-    <div class="sheet center">
-      <p class="kicker">Star set</p>
-      <h2>The fire is chosen</h2>
+    <div class="sheet">
+      <h2>System</h2>
       <p id="next-copy">Next: planets (coming soon).</p>
     </div>
   </section>
 
   <section id="credits" hidden>
     <div class="sheet">
-      <p class="kicker">Music</p>
-      <h2>Recorded orchestra</h2>
-      <p class="note">Zarathustra opens the starfield. Venus stays under the star menu. Jupiter marks the moment a star is confirmed. A flare swells the piece already playing. Nothing in the score is synthesized.</p>
+      <h2>Credits</h2>
+      <p class="note">Venus plays under the choices. Jupiter marks the system, then Venus returns. A flare swells the piece already playing. Zarathustra is the first gesture. Nothing in the score is synthesized. Free forever. No purchases, no ads.</p>
       <ul id="credit-list"></ul>
-      <p class="note">Sky: NASA SVS Deep Star Maps 2020, Ernie Wright (USRA), public domain. The small starfield image is only a faint tint.</p>
+      <p class="note">Sky: NASA SVS Deep Star Maps 2020, Ernie Wright (USRA), public domain, with the ESO/S. Brunier Milky Way, CC BY 4.0, and a nebula drawn in the page.</p>
       <button type="button" id="credits-close">Close</button>
     </div>
   </section>
@@ -93,9 +71,11 @@
     <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
     <span id="cam-dist">7.2</span>
     <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
-    <button type="button" id="paths" hidden aria-pressed="true">Orbits on</button>
-    <button type="button" id="mute" aria-pressed="false">Mute</button>
-    <button type="button" id="credits-open">Credits</button>
+    <button type="button" id="paths" hidden aria-pressed="true" aria-label="Orbital paths">Orbits</button>
+    <button type="button" id="mute" aria-pressed="false" aria-label="Mute">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 9h4l5-4v14l-5-4H4V9zm11.5 3a3.5 3.5 0 0 0-1.5-2.9v5.8a3.5 3.5 0 0 0 1.5-2.9z"/></svg>
+    </button>
+    <button type="button" id="credits-open" aria-label="Credits">i</button>
   </div>
 
   <script src="js/mood-sticker.js"></script>

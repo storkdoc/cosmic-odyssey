@@ -28,22 +28,25 @@ function serve() {
   });
 }
 
-async function assertBrand(page) {
-  const logo = page.locator('#present img.wordmark');
+async function assertLogo(page) {
+  const logo = page.locator('#sp-mark img.brand.mark');
   const nat = await logo.evaluate((el) => ({ w: el.naturalWidth, h: el.naturalHeight, alt: el.alt }));
-  if (nat.w !== 588 || nat.h !== 420) throw new Error('wordmark intrinsic ' + nat.w + 'x' + nat.h);
-  if (nat.alt !== 'SavagePlanets') throw new Error('wordmark alt ' + nat.alt);
+  if (nat.w !== 512 || nat.h !== 512) throw new Error('logo intrinsic ' + nat.w + 'x' + nat.h);
+  if (nat.alt !== 'SavagePlanets') throw new Error('logo alt ' + nat.alt);
   const box = await logo.boundingBox();
   const vp = page.viewportSize();
-  if (!box || box.width < 40) throw new Error('wordmark not on screen');
+  if (!box || box.width < 32) throw new Error('logo missing');
+  if (box.x > 28 || box.y > 28) throw new Error('logo not top-left ' + JSON.stringify(box));
   if (box.x < -1 || box.y < -1 || box.x + box.width > vp.width + 1 || box.y + box.height > vp.height + 1) {
-    throw new Error('logo clipped by the viewport ' + JSON.stringify({ box, vp }));
+    throw new Error('logo outside the viewport');
   }
-  const ratio = box.width / box.height;
-  if (Math.abs(ratio - (588 / 420)) > 0.015) throw new Error('wordmark not at 588:420, ratio ' + ratio.toFixed(4) + ' box ' + box.width.toFixed(1) + 'x' + box.height.toFixed(1));
-  const clip = await logo.evaluate((img) => {
-    const problems = [];
-    if (img.scrollHeight > img.clientHeight + 1) problems.push('img scrollHeight ' + img.scrollHeight + ' > clientHeight ' + img.clientHeight);
+  if (Math.abs(box.width - box.height) > 1.5) throw new Error('logo not square');
+  const link = page.locator('#sp-mark');
+  if (await link.getAttribute('href') !== 'https://savageplanets.com') throw new Error('logo href');
+  if (await link.getAttribute('target') !== '_blank') throw new Error('logo target');
+  const problem = await page.evaluate(() => {
+    const img = document.querySelector('#sp-mark img');
+    if (img.scrollHeight > img.clientHeight + 1) return 'logo cropped';
     const r = img.getBoundingClientRect();
     const clips = (v) => v === 'hidden' || v === 'clip' || v === 'auto' || v === 'scroll';
     let el = img.parentElement;
@@ -52,60 +55,46 @@ async function assertBrand(page) {
       if (clips(s.overflow) || clips(s.overflowX) || clips(s.overflowY)) {
         const a = el.getBoundingClientRect();
         if (r.top < a.top - 1 || r.bottom > a.bottom + 1 || r.left < a.left - 1 || r.right > a.right + 1) {
-          problems.push((el.id || el.tagName) + ' ' + s.overflow + '/' + s.overflowY + ' clips the wordmark');
+          return (el.id || el.tagName) + ' clips the logo';
         }
       }
       el = el.parentElement;
     }
-    return problems;
-  });
-  if (clip.length) throw new Error(clip.join('; '));
-  const mark = page.locator('#sp-mark img.brand.mark');
-  const m = await mark.evaluate((el) => ({ w: el.naturalWidth, h: el.naturalHeight, alt: el.alt }));
-  if (m.w !== 512 || m.h !== 512 || m.alt !== 'SavagePlanets') throw new Error('corner mark ' + JSON.stringify(m));
-  const mb = await mark.boundingBox();
-  if (!mb || Math.abs(mb.width - mb.height) > 1.5) throw new Error('corner mark not square');
-  const planets = await page.locator('.sp-word span').first().evaluate((el) => getComputedStyle(el).color);
-  const savage = await page.locator('.sp-word').first().evaluate((el) => getComputedStyle(el).color);
-  if (planets !== 'rgb(224, 58, 58)') throw new Error('Planets color ' + planets);
-  if (savage !== 'rgb(238, 237, 231)') throw new Error('Savage color ' + savage);
-  const html = await page.content();
-  if (html.includes('Savage Planets')) throw new Error('brand was split with a space');
-  if (!html.includes('SavagePlanets')) throw new Error('brand name missing');
-  const link = page.locator('#logo-link');
-  const href = await link.getAttribute('href');
-  const target = await link.getAttribute('target');
-  if (href !== 'https://savageplanets.com') throw new Error('logo href ' + href);
-  if (target !== '_blank') throw new Error('logo target ' + target);
-  const inside = await link.evaluate((a) => {
-    const img = a.querySelector('img.wordmark');
-    if (!img) return 'missing image';
-    const r = img.getBoundingClientRect();
-    const b = a.getBoundingClientRect();
-    if (r.top < b.top - 1 || r.bottom > b.bottom + 1 || r.left < b.left - 1 || r.right > b.right + 1) return 'link clips the wordmark';
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    if (!document.getElementById('sp-mark').contains(hit)) return 'logo covered by ' + (hit && (hit.id || hit.className || hit.tagName));
+    const text = document.body.innerText;
+    if (/presents/i.test(text)) return 'splash text';
+    if (/gift for the backers/i.test(text)) return 'dedication card';
+    if (text.includes('COSMIC ODYSSEY')) return 'title card';
+    if (document.getElementById('present') || document.getElementById('title')) return 'splash section remains';
     return '';
   });
-  if (inside) throw new Error(inside);
+  if (problem) throw new Error(problem);
+  const html = await page.content();
+  if (html.includes('Savage Planets')) throw new Error('brand was split with a space');
 }
 
 async function voyage(page, name) {
   const click = async (sel) => page.click(sel, { timeout: 15000 });
-  await page.waitForSelector('#present.show');
-  await assertBrand(page);
+  await page.waitForSelector('#count:not([hidden]) h2');
+  await assertLogo(page);
   if (name === 'desktop') {
     const [popup] = await Promise.all([
       page.waitForEvent('popup'),
-      page.click('#logo-link')
+      page.click('#sp-mark')
     ]);
     await popup.close();
-    if (!await page.locator('#present.show').count()) throw new Error('logo click dismissed the splash');
   }
-  await page.locator('#present').dispatchEvent('pointerdown');
-  await page.waitForSelector('#title:not([hidden])');
-  await click('#begin');
-  await page.waitForSelector('#count:not([hidden]) h2');
   const asked = await page.locator('#count h2').innerText();
   if (!/how many stars/i.test(asked)) throw new Error('count step missing: ' + asked);
+  const vp = page.viewportSize();
+  const countBox = await page.locator('#count .sheet').boundingBox();
+  if (name === 'desktop') {
+    const frac = countBox.width / vp.width;
+    if (countBox.x > 8 || frac < 0.32 || frac > 0.42) throw new Error('desktop panel not on the left ' + frac.toFixed(2));
+  } else if (countBox.y < vp.height * 0.4) {
+    throw new Error('phone panel is not a bottom sheet');
+  }
   const choices = await page.locator('.count-card').count();
   if (choices !== 4) throw new Error('count cards ' + choices);
   const rogueLabel = await page.locator('.count-card[data-count="0"]').innerText();
@@ -117,30 +106,34 @@ async function voyage(page, name) {
   const cards = await page.locator('.star-card').count();
   if (cards < 11) throw new Error('star menu has ' + cards + ' cards');
   for (const id of ['o', 'b', 'a', 'f', 'g', 'k', 'm', 'giant', 'wd', 'ns', 'bh']) {
-    const n = await page.locator('.star-card[data-type="' + id + '"] .glyph').count();
-    if (!n) throw new Error('missing glyph ' + id);
+    const n = await page.locator('.star-card[data-type="' + id + '"] canvas.mini').count();
+    if (!n) throw new Error('missing live card ' + id);
   }
-  if (!await page.locator('.star-card[data-type="bh"] .lens').count()) throw new Error('black hole has no lens');
-  if (!await page.locator('.star-card[data-type="bh"] .disk').count()) throw new Error('black hole has no disk');
-  if (!await page.locator('.star-card[data-type="ns"] .beams').count()) throw new Error('neutron star has no beams');
-  if (!await page.locator('.star-card[data-type="giant"] .photosphere').count()) throw new Error('giant has no photosphere');
   await page.waitForFunction(() => window.__sky && window.__sky.w >= 4096 && window.__sky.dpr >= 2, null, { timeout: 20000 });
   const sky = await page.evaluate(() => window.__sky);
   if (name === 'desktop' && sky.w < 8000) throw new Error('desktop sky is ' + sky.w + ' px wide');
   if (name !== 'desktop' && sky.w !== 4096) throw new Error('phone sky is ' + sky.w + ' px wide');
   if (sky.dpr < 2) throw new Error('pixel ratio ' + sky.dpr);
   await click('.star-card[data-type="g"]');
-  await page.waitForSelector('#features:not([hidden]) #feat-radius');
+  await page.waitForSelector('#features:not([hidden]) #feat-mass');
+  if (await page.locator('#type-badge').getAttribute('data-type') !== 'g') throw new Error('type badge missing');
   const before = await page.locator('#derived-l').innerText();
   if (!before.includes('L')) throw new Error('luminosity missing ' + before);
   const hz = await page.locator('#derived-hz').innerText();
   if (!hz.includes('AU')) throw new Error('habitable zone missing ' + hz);
-  await page.locator('#feat-radius').evaluate((el) => {
+  const spin0 = await page.evaluate(() => window.__spin || 0);
+  await page.waitForTimeout(700);
+  const spin1 = await page.evaluate(() => window.__spin || 0);
+  if (!(spin1 > spin0 + 0.04)) throw new Error('star mesh did not rotate ' + spin0 + ' ' + spin1);
+  await page.locator('#feat-mass').evaluate((el) => {
     el.value = el.max;
     el.dispatchEvent(new Event('input', { bubbles: true }));
   });
   const after = await page.locator('#derived-l').innerText();
-  if (after === before) throw new Error('radius slider did not change luminosity');
+  if (after === before) throw new Error('mass slider did not change luminosity');
+  if (await page.locator('#type-badge').getAttribute('data-type') !== 'g') throw new Error('mass slider changed the type');
+  const teff = parseFloat((await page.locator('#derived-t').innerText()).replace(/,/g, ''));
+  if (!(teff >= 5300 && teff <= 6000)) throw new Error('G temperature left its type ' + teff);
   await page.waitForTimeout(400);
   const dist0 = parseFloat(await page.locator('#cam-dist').innerText());
   await click('#zoom-in');
@@ -153,7 +146,7 @@ async function voyage(page, name) {
   if (many === '2') {
     await page.waitForFunction(() => /Star 2 of 2/.test(document.getElementById('which').textContent));
     await click('.star-card[data-type="k"]');
-    await page.waitForSelector('#features:not([hidden]) #feat-radius');
+    await page.waitForSelector('#features:not([hidden]) #feat-mass');
     await click('#confirm-star');
   }
   await page.waitForSelector('#next:not([hidden])');
@@ -203,8 +196,9 @@ try {
     const page = await context.newPage();
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
     try {
-      await page.waitForSelector('#present.show img.wordmark');
-      await assertBrand(page);
+      await page.waitForSelector('#sp-mark img.brand.mark');
+      await page.waitForSelector('#count:not([hidden])');
+      await assertLogo(page);
       console.log(name, 'PASS');
     } catch (err) {
       failed++;
@@ -217,9 +211,7 @@ try {
     const page = await context.newPage();
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
     try {
-      await page.waitForSelector('#present.show');
-      await page.locator('#present').dispatchEvent('pointerdown');
-      await page.click('#begin');
+      await page.waitForSelector('#count:not([hidden])');
       await page.click('.count-card[data-count="0"]');
       await page.waitForSelector('#next:not([hidden])');
       const note = await page.locator('#next-copy').innerText();
