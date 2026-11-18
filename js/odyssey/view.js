@@ -1,6 +1,6 @@
 /* A NASA sky, up to three living stars, and a camera that can see one surface or the whole system. */
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { positionsAt, pathCenters, placeholderPlanets, planetParent, plateScale } from './systems.js';
+import { positionsAt, pathCenters, placeholderPlanets, planetParent, plateScale, plateRadius, systemExtent } from './systems.js';
 import { EffectComposer } from '../../vendor/three/postprocessing/EffectComposer.js';
 import { RenderPass } from '../../vendor/three/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../../vendor/three/postprocessing/UnrealBloomPass.js';
@@ -369,9 +369,12 @@ export function createView(canvas) {
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
     camera.aspect = w / Math.max(1, h);
-    const portrait = w < 820;
-    if (portrait) camera.setViewOffset(w, h, 0, h * 0.16, w, h);
+    const narrow = w < 900;
+    if (narrow && mode === 'system') camera.setViewOffset(w, h, 0, Math.min(40, h * 0.05), w, h);
+    else if (narrow) camera.setViewOffset(w, h, 0, h * 0.16, w, h);
     else camera.setViewOffset(w, h, -w * 0.17, 0, w, h);
+    if (mode === 'system') refit(snapFrame);
+    snapFrame = false;
     camera.updateProjectionMatrix();
     if (composer) composer.setSize(w, h);
     farStars.material.uniforms.uDpr.value = dpr;
@@ -383,11 +386,18 @@ export function createView(canvas) {
     try { buildComposer(); } catch (err) { quality = 'low'; composer = null; }
   }
 
-  const cam = { dist: 8.5, target: 8.5, dragging: false, lastX: 0, lastY: 0, pointers: new Map() };
+  const cam = { dist: 8.5, target: 8.5, lastX: 0, lastY: 0 };
   const pan = { x: 0, z: 0 };
   const keys = { w: false, a: false, s: false, d: false };
-  let zmin = 2.4;
-  let zmax = 48;
+  let zmin = 1.15;
+  let zmax = 80;
+  let fitDist = 8.5;
+  let userZoom = 1;
+  let mapExtent = 4;
+  const pointers = new Map();
+  const touches = new Map();
+  let pinchPrev = 0;
+  let snapFrame = false;
   let showBody = false;
   let mode = 'sky';
   let sys = null;
@@ -428,10 +438,13 @@ export function createView(canvas) {
 
   function setStar(next) {
     mode = 'focus';
-    sys = designFocus(next);
+    sys = { count: 1, architecture: 'single', stars: [next], paths: [], span: 4, planets: [] };
+    mapExtent = 4;
     camera.near = 0.02;
+    camera.far = 2000;
     camera.updateProjectionMatrix();
-    pathLines.forEach((line) => { line.visible = false; });
+    clearPaths();
+    clearPlanets();
     showBody = true;
     bodies.forEach((body, i) => {
       body.group.visible = i === 0;
@@ -443,65 +456,116 @@ export function createView(canvas) {
   function clearPaths() {
     pathLines.forEach((line) => {
       pathRoot.remove(line);
-      line.geometry.dispose();
-      line.material.dispose();
+      line.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+      });
     });
     pathLines = [];
   }
 
   function makeCircle(radius) {
+    const group = new THREE.Group();
     const pts = [];
-    const steps = 128;
+    const steps = 160;
     for (let i = 0; i <= steps; i++) {
       const a = (i / steps) * Math.PI * 2;
       pts.push(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
     }
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({
-      color: 0xf0e2cc, transparent: true, opacity: 0.8
+      color: 0xf0e2cc, transparent: true, opacity: 0.85
     }));
-    line.visible = pathsOn;
-    pathRoot.add(line);
-    pathLines.push(line);
+    const thickness = Math.max(0.004, radius * 0.004);
+    const glow = new THREE.Mesh(
+      new THREE.RingGeometry(Math.max(0.002, radius - thickness), radius + thickness, coarse ? 96 : 160),
+      new THREE.MeshBasicMaterial({
+        color: 0xf7ead8, side: THREE.DoubleSide, transparent: true, opacity: 0.45,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      })
+    );
+    glow.rotation.x = -Math.PI / 2;
+    group.add(line, glow);
+    group.visible = pathsOn;
+    pathRoot.add(group);
+    pathLines.push(group);
+  }
+
+  function frameDistance(extent) {
+    const half = Math.tan((camera.fov * Math.PI) / 360);
+    const w = canvas.clientWidth || window.innerWidth;
+    const h = canvas.clientHeight || window.innerHeight;
+    const narrow = w < 900;
+    const aspect = w / Math.max(1, h);
+    const fitW = narrow ? 0.9 : 0.56;
+    const fitH = narrow && mode === 'system' ? 0.8 : narrow ? 0.5 : 0.88;
+    const distH = extent / Math.max(0.05, half * aspect * fitW);
+    const distV = extent / Math.max(0.05, half * fitH);
+    return Math.max(0.35, distH, distV);
+  }
+
+  function refit(snap) {
+    fitDist = frameDistance(mapExtent);
+    zmin = Math.max(0.04, mapExtent * 0.012);
+    zmax = Math.max(fitDist * 4, zmin * 6);
+    if (snap) {
+      userZoom = 1;
+      cam.target = fitDist;
+      cam.dist = fitDist;
+      pan.x = 0;
+      pan.z = 0;
+      return;
+    }
+    cam.target = Math.min(zmax, Math.max(zmin, fitDist * userZoom));
   }
 
   function setSystem(layout) {
     sys = layout;
     mode = 'system';
     clearPaths();
+    clearPlanets();
     const stars = layout.stars || [];
     showBody = stars.length > 0;
     bodies.forEach((body, i) => {
       const star = stars[i];
       body.group.visible = !!star;
       if (star) paintBody(body, star);
+      else body.spec = null;
     });
     if (!layout.planets) layout.planets = placeholderPlanets(layout);
+    mapExtent = systemExtent(layout);
     (layout.paths || []).forEach((p) => makeCircle(p.radius));
     buildPlanetRings(layout);
-    camera.near = 0.05;
+    buildHabitable(layout);
+    camera.near = 0.01;
     camera.far = 8000;
     camera.updateProjectionMatrix();
+    snapFrame = true;
+    applySize();
     window.__paths = pathsOn;
-  }
-
-  function designFocus(next) {
-    const layout = {
-      count: 1,
-      architecture: 'single',
-      stars: [next],
-      paths: [],
-      span: 4
-    };
-    layout.planets = placeholderPlanets(layout);
-    buildPlanetRings(layout);
-    return layout;
   }
 
   const planetMeshes = [];
   const planetRings = [];
-  function buildPlanetRings(layout) {
-    planetRings.forEach((mesh) => { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); });
+  let hzMesh = null;
+  function clearHz() {
+    if (!hzMesh) return;
+    scene.remove(hzMesh);
+    hzMesh.geometry.dispose();
+    hzMesh.material.dispose();
+    hzMesh = null;
+  }
+  function clearPlanets() {
+    planetRings.forEach((mesh) => {
+      scene.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    });
     planetRings.length = 0;
+    planetMeshes.forEach((mesh) => { mesh.visible = false; });
+    clearHz();
+  }
+  function buildPlanetRings(layout) {
+    clearPlanets();
     const planets = layout.planets || [];
     while (planetMeshes.length < planets.length) {
       const mesh = new THREE.Mesh(
@@ -512,15 +576,19 @@ export function createView(canvas) {
       planetMeshes.push(mesh);
     }
     planetMeshes.forEach((mesh, i) => {
-      mesh.visible = i < planets.length;
-      if (planets[i]) mesh.material.color.set(planets[i].color);
-      mesh.scale.setScalar(planets[i] ? planets[i].radius : 1);
+      const planet = planets[i];
+      mesh.visible = !!planet && mode === 'system';
+      if (!planet) return;
+      mesh.material.color.set(planet.color);
+      const world = Math.max(mapExtent * 0.012, 0.02) * (0.7 + (planet.radius || 0.5));
+      mesh.scale.setScalar(world / 0.16);
     });
     planets.forEach((planet) => {
+      const thickness = Math.max(0.006, planet.a * 0.0045);
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(planet.a * 0.992, planet.a * 1.008, coarse ? 64 : 96),
+        new THREE.RingGeometry(Math.max(0.01, planet.a - thickness), planet.a + thickness, coarse ? 80 : 128),
         new THREE.MeshBasicMaterial({
-          color: 0xf3e6d0, side: THREE.DoubleSide, transparent: true, opacity: 0.55,
+          color: 0xf3e6d0, side: THREE.DoubleSide, transparent: true, opacity: 0.72,
           blending: THREE.AdditiveBlending, depthWrite: false
         })
       );
@@ -529,6 +597,23 @@ export function createView(canvas) {
       scene.add(ring);
       planetRings.push(ring);
     });
+  }
+  function buildHabitable(layout) {
+    clearHz();
+    const star = layout.stars && layout.stars[0];
+    const hz = star && star.hz;
+    if (!hz || !(hz.outer > hz.inner)) return;
+    const inner = Math.max(0.02, hz.inner);
+    const outer = Math.max(inner * 1.04, hz.outer);
+    hzMesh = new THREE.Mesh(
+      new THREE.RingGeometry(inner, outer, coarse ? 80 : 128),
+      new THREE.MeshBasicMaterial({
+        color: 0xb7d7a8, side: THREE.DoubleSide, transparent: true, opacity: 0.16, depthWrite: false
+      })
+    );
+    hzMesh.rotation.x = -Math.PI / 2;
+    hzMesh.renderOrder = 1;
+    scene.add(hzMesh);
   }
 
   function setPaths(on) {
@@ -541,21 +626,41 @@ export function createView(canvas) {
   let platesCover = false;
   function setPlatesCover(on) { platesCover = !!on; }
 
+  function hzAnchor(placed) {
+    if (!sys || !sys.stars || !sys.stars[0] || !sys.stars[0].hz) return { x: 0, z: 0 };
+    const hz = sys.stars[0].hz;
+    const aroundStar = sys.count < 2 || (sys.holman && hz.outer < sys.holman.sType * 0.95);
+    return planetParent(sys, placed, aroundStar ? 'star0' : 'bary');
+  }
+
   function movePlanets(time) {
-    if (!sys || !sys.planets || !sys.planets.length) return;
+    if (mode !== 'system' || !sys || !sys.planets || !sys.planets.length) {
+      planetMeshes.forEach((mesh) => { mesh.visible = false; });
+      planetRings.forEach((ring) => { ring.visible = false; });
+      if (hzMesh) hzMesh.visible = false;
+      return;
+    }
     const turns = time / 18;
-    const placed = sys.count > 1 ? positionsAt(sys, turns) : [{ x: 0, z: 0 }];
+    const placed = sys.count > 1 ? positionsAt(sys, turns) : [{ x: 0, z: 0, drawAU: sys.stars[0] && sys.stars[0].drawAU }];
     sys.planets.forEach((planet, i) => {
       const parent = planetParent(sys, placed, planet.parent);
       const ang = time * 0.4 / Math.max(0.12, planet.period);
       const x = parent.x + Math.cos(ang) * planet.a;
       const z = parent.z + Math.sin(ang) * planet.a;
-      if (planetMeshes[i]) planetMeshes[i].position.set(x, 0.04, z);
+      if (planetMeshes[i]) {
+        planetMeshes[i].visible = true;
+        planetMeshes[i].position.set(x, 0.02, z);
+      }
       if (planetRings[i]) {
         planetRings[i].position.set(parent.x, 0, parent.z);
         planetRings[i].visible = pathsOn;
       }
     });
+    if (hzMesh) {
+      const anchor = hzAnchor(placed);
+      hzMesh.position.set(anchor.x, 0, anchor.z);
+      hzMesh.visible = true;
+    }
   }
 
   const projector = new THREE.Vector3();
@@ -571,10 +676,11 @@ export function createView(canvas) {
     /* The new plates fill about 87% of the frame with the star disk. The frame
        is sized so that disk, not the transparent margin, matches the diameter. */
     const DISK = 0.87;
-    const scale = plateScale(star);
+    const gap = mode === 'system' && sys && sys.separation ? sys.separation : 0;
+    const scale = mode === 'system' ? plateRadius(star, mapExtent, gap) : plateScale(star);
     const center = project(wx, 0, wz);
     const edge = project(wx + scale, 0, wz);
-    const diskPx = Math.max(12, Math.hypot(edge.x - center.x, edge.y - center.y));
+    const diskPx = Math.max(7, Math.hypot(edge.x - center.x, edge.y - center.y));
     const radius = diskPx / DISK;
     const size = radius * 2;
     return {
@@ -587,6 +693,7 @@ export function createView(canvas) {
     };
   }
 
+  const viewDir = new THREE.Vector3();
   function pose() {
     const plates = [];
     if (showBody) {
@@ -599,15 +706,23 @@ export function createView(canvas) {
         plates.push(plateBox(star, at.x, at.z));
       });
     }
+    camera.getWorldDirection(viewDir);
+    const lean = Math.atan2(Math.hypot(viewDir.x, viewDir.z), Math.max(0, -viewDir.y));
     const reading = {
-      tilt: 0,
+      tilt: lean < 1e-3 ? 0 : lean,
       theta: 0,
       phi: 0,
       panX: pan.x,
       panZ: pan.z,
       dist: cam.dist,
       target: cam.target,
-      film: plates.length > 0 && (plates[0].type === 'g' || true),
+      mode,
+      extent: mapExtent,
+      fit: fitDist,
+      orbits: planetRings.length,
+      hz: !!(hzMesh && hzMesh.visible && mode === 'system'),
+      count: sys ? sys.count : 0,
+      film: plates.length > 0,
       plate: plates[0] || null,
       plates
     };
@@ -616,49 +731,125 @@ export function createView(canvas) {
     return reading;
   }
 
-  function zoomBy(factor) {
-    cam.target = Math.min(zmax, Math.max(zmin, cam.target * factor));
+  function publish() {
+    const prior = window.__pose || {};
+    window.__pose = Object.assign(prior, {
+      tilt: prior.tilt || 0,
+      panX: pan.x,
+      panZ: pan.z,
+      dist: cam.dist,
+      target: cam.target,
+      mode,
+      extent: mapExtent,
+      fit: fitDist
+    });
   }
 
-  canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    zoomBy(e.deltaY > 0 ? 1.08 : 0.92);
-  }, { passive: false });
-  canvas.addEventListener('pointerdown', (e) => {
-    cam.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    cam.dragging = cam.pointers.size === 1;
-    cam.lastX = e.clientX;
-    cam.lastY = e.clientY;
-    cam.pinch = cam.pointers.size === 2 ? pinchDist() : 0;
-  });
-  canvas.addEventListener('pointermove', (e) => {
-    if (!cam.pointers.has(e.pointerId)) return;
-    cam.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (cam.pointers.size === 2) {
-      const d = pinchDist();
-      if (cam.pinch) zoomBy(cam.pinch / d);
-      cam.pinch = d;
-      return;
-    }
-    if (!cam.dragging) return;
-    const dx = e.clientX - cam.lastX;
-    const dy = e.clientY - cam.lastY;
-    cam.lastX = e.clientX;
-    cam.lastY = e.clientY;
+  function zoomBy(factor) {
+    cam.target = Math.min(zmax, Math.max(zmin, cam.target * factor));
+    if (fitDist > 0) userZoom = cam.target / fitDist;
+    publish();
+  }
+
+  function panBy(dx, dy) {
     const span = cam.dist * 0.0022;
-    pan.x -= dx * span;
-    pan.z -= dy * span;
-    pan.x = Math.max(-40, Math.min(40, pan.x));
-    pan.z = Math.max(-40, Math.min(40, pan.z));
-  });
-  const endPointer = (e) => { cam.pointers.delete(e.pointerId); cam.dragging = cam.pointers.size === 1; };
-  canvas.addEventListener('pointerup', endPointer);
-  canvas.addEventListener('pointercancel', endPointer);
-  function pinchDist() {
-    const pts = [...cam.pointers.values()];
+    const limit = Math.max(12, mapExtent * 4);
+    pan.x = Math.max(-limit, Math.min(limit, pan.x - dx * span));
+    pan.z = Math.max(-limit, Math.min(limit, pan.z - dy * span));
+    publish();
+  }
+
+  function separation(map) {
+    const pts = [...map.values()];
     if (pts.length < 2) return 0;
     return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
   }
+
+  function notePinch(now) {
+    if (pinchPrev > 0 && now > 0) zoomBy(pinchPrev / now);
+    pinchPrev = now;
+  }
+
+  const pad = document.getElementById('gesture') || canvas;
+  pad.style.touchAction = 'none';
+  const stop = (event) => { if (event.cancelable) event.preventDefault(); };
+  pad.addEventListener('wheel', (event) => {
+    stop(event);
+    zoomBy(event.deltaY > 0 ? 1.08 : 0.92);
+  }, { passive: false });
+  pad.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse' && touches.size) return;
+    stop(event);
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, type: event.pointerType });
+    cam.lastX = event.clientX;
+    cam.lastY = event.clientY;
+    pinchPrev = pointers.size >= 2 ? separation(pointers) : 0;
+  }, { passive: false });
+  pad.addEventListener('pointermove', (event) => {
+    if (!pointers.has(event.pointerId)) return;
+    stop(event);
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, type: event.pointerType });
+    if (pointers.size >= 2) {
+      notePinch(separation(pointers));
+      return;
+    }
+    if (touches.size >= 2) return;
+    const dx = event.clientX - cam.lastX;
+    const dy = event.clientY - cam.lastY;
+    cam.lastX = event.clientX;
+    cam.lastY = event.clientY;
+    panBy(dx, dy);
+  }, { passive: false });
+  const endPointer = (event) => {
+    pointers.delete(event.pointerId);
+    if (pointers.size === 1) {
+      const only = [...pointers.values()][0];
+      cam.lastX = only.x;
+      cam.lastY = only.y;
+    }
+    if (pointers.size < 2 && touches.size < 2) pinchPrev = 0;
+  };
+  pad.addEventListener('pointerup', endPointer);
+  pad.addEventListener('pointercancel', endPointer);
+  pad.addEventListener('touchstart', (event) => {
+    stop(event);
+    touches.clear();
+    [...event.touches].forEach((touch) => touches.set(touch.identifier, { x: touch.clientX, y: touch.clientY }));
+    if (touches.size === 1) {
+      const only = [...touches.values()][0];
+      cam.lastX = only.x;
+      cam.lastY = only.y;
+    }
+    if (pointers.size < 2) pinchPrev = touches.size >= 2 ? separation(touches) : 0;
+  }, { passive: false });
+  pad.addEventListener('touchmove', (event) => {
+    stop(event);
+    touches.clear();
+    [...event.touches].forEach((touch) => touches.set(touch.identifier, { x: touch.clientX, y: touch.clientY }));
+    if (touches.size >= 2 && pointers.size < 2) {
+      notePinch(separation(touches));
+      return;
+    }
+    if (touches.size === 1 && pointers.size === 0) {
+      const only = [...touches.values()][0];
+      panBy(only.x - cam.lastX, only.y - cam.lastY);
+      cam.lastX = only.x;
+      cam.lastY = only.y;
+    }
+  }, { passive: false });
+  const endTouch = (event) => {
+    stop(event);
+    touches.clear();
+    [...event.touches].forEach((touch) => touches.set(touch.identifier, { x: touch.clientX, y: touch.clientY }));
+    if (touches.size === 1) {
+      const only = [...touches.values()][0];
+      cam.lastX = only.x;
+      cam.lastY = only.y;
+    }
+    if (touches.size < 2 && pointers.size < 2) pinchPrev = 0;
+  };
+  pad.addEventListener('touchend', endTouch, { passive: false });
+  pad.addEventListener('touchcancel', endTouch, { passive: false });
 
   let simTime = 0;
   function frame(dt) {
@@ -678,24 +869,28 @@ export function createView(canvas) {
     farStars.material.uniforms.uSpeed.value = reduce ? 0 : Math.min(1.2, speed * 0.8);
     nearStars.material.uniforms.uSpeed.value = reduce ? 0 : Math.min(1.6, speed * 1.4);
     const keySpeed = cam.dist * 0.55 * dt;
+    const limit = Math.max(12, mapExtent * 4);
     if (keys.a) pan.x -= keySpeed;
     if (keys.d) pan.x += keySpeed;
     if (keys.w) pan.z -= keySpeed;
     if (keys.s) pan.z += keySpeed;
-    pan.x = Math.max(-40, Math.min(40, pan.x));
-    pan.z = Math.max(-40, Math.min(40, pan.z));
+    pan.x = Math.max(-limit, Math.min(limit, pan.x));
+    pan.z = Math.max(-limit, Math.min(limit, pan.z));
     cam.dist += (cam.target - cam.dist) * (1 - Math.pow(0.001, Math.max(0.016, dt)));
     camera.up.set(0, 0, -1);
     camera.position.set(pan.x, cam.dist, pan.z);
     camera.lookAt(pan.x, 0, pan.z);
+    const filmOn = platesCover;
     if (mode === 'system' && sys && sys.count > 0) {
       const turns = time / (reduce ? 48 : 18);
       const placed = positionsAt(sys, turns);
       placed.forEach((p, i) => {
         const body = bodies[i];
-        if (!body || !body.group.visible) return;
+        if (!body || !body.spec) return;
         body.group.position.set(p.x, 0, p.z);
-        body.group.scale.setScalar(Math.max(1e-4, p.drawAU));
+        const gap = sys && sys.separation ? sys.separation : 0;
+        body.group.scale.setScalar(Math.max(1e-4, plateRadius(body.spec, mapExtent, gap)));
+        body.group.visible = showBody && !filmOn;
       });
       const centers = pathCenters(sys, turns);
       centers.forEach((c, i) => {
@@ -704,7 +899,6 @@ export function createView(canvas) {
     }
     movePlanets(time);
     pose();
-    const filmOn = platesCover;
     bodies.forEach((body, index) => {
       if (!body.spec) return;
       if (mode === 'focus' && index === 0) body.group.visible = showBody && !filmOn;

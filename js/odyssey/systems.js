@@ -210,6 +210,32 @@ export function plateScale(star) {
   return Math.max(0.07, Math.min(4.2, Math.sqrt(Math.max(suns, 1e-8))));
 }
 
+/* Disk radius on the overhead map. A sun is a small fraction of the framed
+   system. A gap (the inner stellar separation) keeps a binary from merging
+   into one disk. Remnants keep a floor so they stay findable, and a giant is
+   capped so it cannot cover the orbits. Without an extent, this is the close-up scale. */
+export function plateRadius(star, extent, gap) {
+  const rel = plateScale(star);
+  if (!(extent > 0)) return rel;
+  let size = rel * extent * 0.085;
+  if (gap > 0) size = Math.min(size, gap * 0.22 * Math.min(rel, 1.4));
+  const floor = gap > 0 ? Math.min(extent * 0.02, gap * 0.1) : extent * 0.02;
+  return Math.max(floor, Math.min(extent * 0.18, size));
+}
+
+/* Radius that the default camera must contain: outermost world, stellar orbit, and habitable zone. */
+export function systemExtent(layout) {
+  if (!layout || !layout.stars || !layout.stars.length) return 2;
+  let maxR = 0.5;
+  (layout.planets || []).forEach((planet) => { if (planet.a) maxR = Math.max(maxR, planet.a); });
+  (layout.paths || []).forEach((path) => { if (path.radius) maxR = Math.max(maxR, path.radius); });
+  if (layout.outerAU) maxR = Math.max(maxR, layout.outerAU);
+  if (layout.separation) maxR = Math.max(maxR, layout.separation * 0.5);
+  const hz = layout.stars[0] && layout.stars[0].hz;
+  if (hz && hz.outer > hz.inner) maxR = Math.max(maxR, hz.outer);
+  return maxR * 1.16;
+}
+
 /* Placeholder worlds on the rings. They use the habitable zone and, for more than
    one star, the Holman and Mardling limits already stored on the layout. */
 export function placeholderPlanets(layout) {

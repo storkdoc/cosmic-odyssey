@@ -226,9 +226,8 @@ function beginStar(index) {
 
 function finish() {
   const sys = designSystem(built);
-  if (sys.count >= 2) view.setSystem(sys);
-  else if (sys.count === 1) view.setStar(built[0]);
-  else view.setSystem(sys);
+  view.setSystem(sys);
+  document.body.classList.add('map-open');
   document.getElementById('next-copy').textContent = sys.note + ' Placeholder worlds already move on the rings. Next: planets (coming soon).';
   pathsBtn.hidden = sys.count < 1;
   pathsBtn.setAttribute('aria-pressed', 'true');
@@ -268,6 +267,11 @@ document.getElementById('confirm-star').addEventListener('click', () => {
 
 document.getElementById('zoom-in').addEventListener('click', () => view.zoomBy(0.82));
 document.getElementById('zoom-out').addEventListener('click', () => view.zoomBy(1.18));
+
+document.getElementById('next-fold').addEventListener('click', () => {
+  const open = next.classList.toggle('expanded');
+  document.getElementById('next-fold').setAttribute('aria-expanded', open ? 'true' : 'false');
+});
 
 pathsBtn.addEventListener('click', () => {
   const on = pathsBtn.getAttribute('aria-pressed') !== 'true';
