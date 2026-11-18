@@ -78,7 +78,17 @@ export function createGFilm(root) {
   /* Types whose plates are in the repo. Others use the G plate, tinted, until
      assets/video/<type>.webm and <type>-pack.mp4 are added here. */
   const HAVE = {
-    g: { webm: 'assets/video/g-star.webm', pack: 'assets/video/g-star-pack.mp4' }
+    o: { webm: 'assets/video/o-star.webm', pack: 'assets/video/o-star-pack.mp4' },
+    b: { webm: 'assets/video/b-star.webm', pack: 'assets/video/b-star-pack.mp4' },
+    a: { webm: 'assets/video/a-star.webm', pack: 'assets/video/a-star-pack.mp4' },
+    f: { webm: 'assets/video/f-star.webm', pack: 'assets/video/f-star-pack.mp4' },
+    g: { webm: 'assets/video/g-star.webm', pack: 'assets/video/g-star-pack.mp4' },
+    k: { webm: 'assets/video/k-star.webm', pack: 'assets/video/k-star-pack.mp4' },
+    m: { webm: 'assets/video/m-star.webm', pack: 'assets/video/m-star-pack.mp4' },
+    giant: { webm: 'assets/video/giant-star.webm', pack: 'assets/video/giant-star-pack.mp4' },
+    wd: { webm: 'assets/video/wd-star.webm', pack: 'assets/video/wd-star-pack.mp4' },
+    ns: { webm: 'assets/video/ns-star.webm', pack: 'assets/video/ns-star-pack.mp4' },
+    bh: { webm: 'assets/video/bh-star.webm', pack: 'assets/video/bh-star-pack.mp4' }
   };
   function sourceFor(type) {
     const name = type || 'g';
