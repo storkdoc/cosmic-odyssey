@@ -217,10 +217,50 @@ export function plateScale(star) {
 export function plateRadius(star, extent, gap) {
   const rel = plateScale(star);
   if (!(extent > 0)) return rel;
-  let size = rel * extent * 0.085;
-  if (gap > 0) size = Math.min(size, gap * 0.22 * Math.min(rel, 1.4));
-  const floor = gap > 0 ? Math.min(extent * 0.02, gap * 0.1) : extent * 0.02;
-  return Math.max(floor, Math.min(extent * 0.18, size));
+  if (!(gap > 0)) {
+    const size = rel * extent * 0.085;
+    return Math.max(extent * 0.02, Math.min(extent * 0.16, size));
+  }
+  /* Two companions each take at most 18% of the gap, so the disks cannot meet. */
+  const cap = gap * 0.18;
+  const size = Math.min(rel, 1) * cap;
+  const floor = Math.min(gap * 0.05, cap);
+  return Math.max(floor, Math.min(cap, size));
+}
+
+/* How much to open a tight pair so the gap reads on the map without crossing the outer star. */
+export function layoutScale(layout, extent) {
+  const gap = layout && layout.count > 1 && layout.separation > 0 ? layout.separation : 0;
+  if (!gap || !(extent > 0)) return 1;
+  const wanted = extent * 0.36;
+  let cap = 8;
+  if (layout.outerAU) cap = Math.min(cap, (0.42 * layout.outerAU) / gap);
+  return Math.max(1, Math.min(wanted / gap, cap));
+}
+
+export function drawnGap(layout, extent) {
+  const gap = layout && layout.separation > 0 ? layout.separation : 0;
+  return gap * layoutScale(layout, extent);
+}
+
+/* Star positions for the map. A tight inner pair is opened around its own barycenter.
+   The outer star of a triple stays on its true orbit. */
+export function drawnStars(layout, turns, extent) {
+  const raw = positionsAt(layout, turns);
+  const scale = layoutScale(layout, extent);
+  if (raw.length < 2 || scale === 1) return raw;
+  if (raw.length === 2) {
+    return raw.map((p) => ({ x: p.x * scale, z: p.z * scale, drawAU: p.drawAU }));
+  }
+  const m1 = layout.stars[0].mass || 1;
+  const m2 = layout.stars[1].mass || 1;
+  const bx = (raw[0].x * m1 + raw[1].x * m2) / (m1 + m2);
+  const bz = (raw[0].z * m1 + raw[1].z * m2) / (m1 + m2);
+  return [
+    { x: bx + (raw[0].x - bx) * scale, z: bz + (raw[0].z - bz) * scale, drawAU: raw[0].drawAU },
+    { x: bx + (raw[1].x - bx) * scale, z: bz + (raw[1].z - bz) * scale, drawAU: raw[1].drawAU },
+    raw[2]
+  ];
 }
 
 /* Radius that the default camera must contain: outermost world, stellar orbit, and habitable zone. */

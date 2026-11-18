@@ -46,26 +46,21 @@ canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-.plate-slot, #g-film {
+#plate-bank {
   position: fixed;
-  z-index: 2;
+  left: 0;
+  top: 0;
+  width: 320px;
+  height: 182px;
+  overflow: hidden;
+  opacity: 0;
   pointer-events: none;
-  touch-action: none;
-  background: transparent;
+  z-index: 0;
 }
-.plate-slot[hidden], #g-film[hidden] { display: none !important; }
-.plate-tint { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: color; opacity: 0; }
-.plate-tint.on { opacity: 0.7; }
-.plate-slot.pack video, #g-film.pack video { opacity: 0 !important; width: 1px; height: 1px; }
-.plate-slot video, .plate-slot canvas, #g-film video, #g-film canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: transparent;
+#plate-bank video {
+  width: 320px;
+  height: 182px;
   pointer-events: none;
-  touch-action: none;
 }
 input[type="range"] { touch-action: pan-x; }
 button, a { touch-action: manipulation; }

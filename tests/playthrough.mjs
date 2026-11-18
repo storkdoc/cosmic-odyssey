@@ -7,7 +7,7 @@ import { extname, join, normalize } from 'node:path';
 import { chromium, webkit, devices } from 'playwright-core';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.webm': 'video/webm', '.ico': 'image/x-icon' };
 
 function serve() {
   return new Promise((resolve) => {
@@ -36,51 +36,49 @@ async function sample(page, x, y) {
   return text;
 }
 
-async function assertFilmClear(page) {
-  await page.waitForFunction(() => document.getElementById('g-film') && document.getElementById('g-film').dataset.ready === '1', null, { timeout: 15000 });
-  const t0 = await page.evaluate(() => document.querySelector('#g-film video').currentTime);
-  await page.waitForTimeout(350);
-  const t1 = await page.evaluate(() => document.querySelector('#g-film video').currentTime);
-  if (!(t1 > t0)) throw new Error('G-star film is not playing');
-  const src = await page.evaluate(() => document.querySelector('#g-film video').currentSrc);
-  if (!/g-star/.test(src)) throw new Error('film source ' + src);
-  const poster = await page.evaluate(() => document.querySelector('#g-film video').poster);
-  if (!/g-star-poster/.test(poster)) throw new Error('poster ' + poster);
+async function platePixels(page, minCore = 80) {
+  await page.waitForFunction(() => {
+    const v = document.querySelector('#plate-bank video');
+    return window.__plateReady === '1' && v && v.currentTime > 0.15 && /pack\.mp4/.test(v.currentSrc || '');
+  }, null, { timeout: 15000 });
   const spot = await page.evaluate(() => {
-    const film = document.getElementById('g-film').getBoundingClientRect();
-    const va = 1280 / 726;
-    const ca = film.width / Math.max(1, film.height);
-    let vw, vh, vx, vy;
-    if (ca > va) { vh = film.height; vw = vh * va; vx = film.left + (film.width - vw) / 2; vy = film.top; }
-    else { vw = film.width; vh = vw / va; vx = film.left; vy = film.top + (film.height - vh) / 2; }
-    return { x: vx + vw * 0.03, y: vy + vh * 0.12, dpr: window.devicePixelRatio };
+    const plate = window.__pose.plates[0];
+    return {
+      dpr: window.devicePixelRatio,
+      core: { x: plate.cx, y: plate.cy },
+      corner: { x: plate.cornerX, y: plate.cornerY },
+      src: document.querySelector('#plate-bank video').currentSrc
+    };
   });
-  const x = Math.round(spot.x * spot.dpr);
-  const y = Math.round(spot.y * spot.dpr);
-  const core = await page.evaluate(() => {
-    const film = document.getElementById('g-film').getBoundingClientRect();
-    return { x: film.left + film.width / 2, y: film.top + film.height / 2, dpr: window.devicePixelRatio };
-  });
-  const sun = await sample(page, Math.round(core.x * core.dpr), Math.round(core.y * core.dpr));
-  if (sun[0] < 120 || sun[1] < 40) throw new Error('G-star film is not showing the sun ' + sun.join(','));
-  const covered = await sample(page, x, y);
-  await page.evaluate(() => { document.getElementById('g-film').style.visibility = 'hidden'; });
-  await page.waitForTimeout(80);
-  const field = await sample(page, x, y);
-  await page.evaluate(() => { document.getElementById('g-film').style.visibility = ''; });
-  const sum = covered[0] + covered[1] + covered[2];
-  if (sum < 18) throw new Error('outside the corona is black ' + covered.join(','));
+  if (!/g-star-pack\.mp4/.test(spot.src) && !/star-pack\.mp4/.test(spot.src)) throw new Error('plate source ' + spot.src);
+  const core = await sample(page, Math.round(spot.core.x * spot.dpr), Math.round(spot.core.y * spot.dpr));
+  if (core[0] < minCore) throw new Error('star core is not lit ' + core.join(','));
+  const sx = Math.round(spot.corner.x * spot.dpr);
+  const sy = Math.round(spot.corner.y * spot.dpr);
+  const covered = await sample(page, sx, sy);
+  await page.evaluate(() => { window.__hidePlates = true; });
+  await page.waitForTimeout(120);
+  const field = await sample(page, sx, sy);
+  await page.evaluate(() => { window.__hidePlates = false; });
   for (let i = 0; i < 3; i++) {
-    if (Math.abs(covered[i] - field[i]) > 40) throw new Error('film halo ' + covered.join(',') + ' vs starfield ' + field.join(','));
+    if (Math.abs(covered[i] - field[i]) > 28) throw new Error('plate corner is a box ' + covered.join(',') + ' vs starfield ' + field.join(','));
   }
-  const loops = await page.evaluate(() => document.querySelector('#g-film video').loop);
+  if (covered[0] + covered[1] + covered[2] < 8 && field[0] + field[1] + field[2] > 24) {
+    throw new Error('plate corner is black ' + covered.join(','));
+  }
+  return spot;
+}
+
+async function assertFilmClear(page) {
+  await platePixels(page);
+  const loops = await page.evaluate(() => document.querySelector('#plate-bank video').loop);
   if (!loops) throw new Error('the plate does not loop');
   await page.evaluate(() => {
-    const v = document.querySelector('#g-film video');
+    const v = document.querySelector('#plate-bank video');
     v.currentTime = Math.max(0, v.duration - 0.08);
   });
   await page.waitForFunction(() => {
-    const v = document.querySelector('#g-film video');
+    const v = document.querySelector('#plate-bank video');
     return v.currentTime < 0.45;
   }, null, { timeout: 4000 });
 }
@@ -153,7 +151,6 @@ async function voyage(page, name) {
       hit: el && el.id,
       action: getComputedStyle(gesture).touchAction,
       meta,
-      plates: getComputedStyle(document.getElementById('g-film')).pointerEvents,
       gestureBlocked: start.defaultPrevented,
       blocked
     };
@@ -161,8 +158,9 @@ async function voyage(page, name) {
   if (touchSurface.hit !== 'gesture') throw new Error('touches hit ' + touchSurface.hit + ' instead of the map');
   if (touchSurface.action !== 'none') throw new Error('touch-action ' + touchSurface.action);
   if (!/user-scalable=no/.test(touchSurface.meta) || !/maximum-scale=1/.test(touchSurface.meta)) throw new Error('viewport ' + touchSurface.meta);
-  if (touchSurface.plates !== 'none') throw new Error('plates take touches');
   if (!touchSurface.gestureBlocked) throw new Error('gesture zoom was not blocked');
+  const overlay = await page.evaluate(() => !!document.getElementById('g-film') || !!document.querySelector('.plate-slot'));
+  if (overlay) throw new Error('a video overlay is still in the page');
   const asked = await page.locator('#count h2').innerText();
   if (!/how many stars/i.test(asked)) throw new Error('count step missing: ' + asked);
   const vp = page.viewportSize();
@@ -264,13 +262,17 @@ async function voyage(page, name) {
   if (many === '2' && !/Holman/.test(next)) throw new Error('binary note ' + next);
   if (many === '2') {
     await page.waitForFunction(() => {
-      const plates = window.__pose && window.__pose.plates;
-      if (!plates || plates.length !== 2) return false;
-      const shown = [...document.querySelectorAll('[data-plate]')].filter((el) => !el.hidden);
-      if (shown.length < 2) return false;
-      const srcs = shown.map((el) => (el.querySelector('video') && el.querySelector('video').currentSrc) || '');
-      return srcs.some((s) => s.includes('g-star')) && srcs.some((s) => s.includes('k-star'));
+      const world = window.__pose && window.__pose.world;
+      if (!world || world.length !== 2) return false;
+      const srcs = window.__plateSrcs || [];
+      return srcs.some((s) => s.includes('g-star-pack')) && srcs.some((s) => s.includes('k-star-pack'));
     }, null, { timeout: 15000 });
+    const crossed = await page.evaluate(() => {
+      const world = window.__pose.world;
+      const d = Math.hypot(world[0].x - world[1].x, world[0].z - world[1].z);
+      return d <= world[0].r + world[1].r ? d : '';
+    });
+    if (crossed) throw new Error('binary stars overlap');
     await page.waitForSelector('#paths:not([hidden])');
     if (await page.evaluate(() => window.__paths) !== true) throw new Error('orbits did not start on');
     await click('#paths');
@@ -362,6 +364,67 @@ try {
       console.log(name, 'FAIL', err.message.split('\n')[0]);
     }
     await context.close();
+  }
+  async function confirmStars(page, count) {
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    await page.click(`.count-card[data-count="${count}"]`);
+    for (const type of ['g', 'k', 'm'].slice(0, count)) {
+      await page.waitForSelector('#studio:not([hidden]) .star-card');
+      await page.click(`.star-card[data-type="${type}"]`);
+      await page.click('#confirm-star');
+    }
+    await page.evaluate((n) => { window.__want = n; }, count);
+    await page.waitForFunction(() => {
+      const pose = window.__pose;
+      return pose && pose.mode === 'system' && pose.world && pose.world.length === window.__want && window.__plateReady === '1';
+    }, null, { timeout: 20000 });
+    if (count > 1) {
+      const hit = await page.evaluate(() => {
+        const world = window.__pose.world;
+        for (let i = 0; i < world.length; i++) {
+          for (let j = i + 1; j < world.length; j++) {
+            const d = Math.hypot(world[i].x - world[j].x, world[i].z - world[j].z);
+            if (d <= world[i].r + world[j].r + 1e-3) return d + ' <= ' + world[i].r + ' + ' + world[j].r;
+          }
+        }
+        return '';
+      });
+      if (hit) throw new Error('star disks intersect ' + hit);
+    }
+    await platePixels(page, 36);
+  }
+  for (const count of [1, 3]) {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const page = await context.newPage();
+    page.on('pageerror', (err) => console.log('plate', count, String(err).split('\n')[0]));
+    try {
+      await confirmStars(page, count);
+      console.log('clear-chrome', count, 'PASS');
+    } catch (err) {
+      failed++;
+      console.log('clear-chrome', count, 'FAIL', err.message.split('\n')[0]);
+    }
+    await context.close();
+  }
+  try {
+    const kit = await webkit.launch({ headless: true });
+    for (const count of [1, 3]) {
+      const context = await kit.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+      const page = await context.newPage();
+      page.on('pageerror', (err) => console.log('wk plate', count, String(err).split('\n')[0]));
+      try {
+        await confirmStars(page, count);
+        console.log('clear-webkit', count, 'PASS');
+      } catch (err) {
+        failed++;
+        console.log('clear-webkit', count, 'FAIL', err.message.split('\n')[0]);
+      }
+      await context.close();
+    }
+    await kit.close();
+  } catch (err) {
+    failed++;
+    console.log('clear-webkit', 'FAIL', err.message.split('\n')[0]);
   }
   const iphone = { ...devices['iPhone 13'], hasTouch: true, isMobile: true };
   try {
