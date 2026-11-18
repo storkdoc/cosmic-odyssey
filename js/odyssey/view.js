@@ -1,8 +1,10 @@
 /* A NASA sky, up to three living stars, and a camera that can see one surface or the whole system. */
 import * as THREE from '../../vendor/three/three.module.min.js';
 import { planetParent, plateScale, plateRadius, systemExtent, ORBIT_SECONDS } from './systems.js';
-import { createGravity } from './gravity.js';
+import { createGravity, relativeOrbit } from './gravity.js';
 import { createPlateBank } from './plates.js';
+import { createPlanetLayer } from './planetdraw.js';
+import { planetDisc } from './planets.js';
 import { EffectComposer } from '../../vendor/three/postprocessing/EffectComposer.js';
 import { RenderPass } from '../../vendor/three/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../../vendor/three/postprocessing/UnrealBloomPass.js';
@@ -496,6 +498,7 @@ export function createView(canvas) {
     group.visible = pathsOn;
     pathRoot.add(group);
     pathLines.push(group);
+    return group;
   }
 
   function frameDistance(extent) {
@@ -569,6 +572,16 @@ export function createView(canvas) {
     hzMesh.material.dispose();
     hzMesh = null;
   }
+  function dropPath(group) {
+    if (!group) return;
+    const idx = pathLines.indexOf(group);
+    if (idx >= 0) pathLines.splice(idx, 1);
+    pathRoot.remove(group);
+    group.traverse((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+    });
+  }
   function clearPlanets() {
     planetRings.forEach((mesh) => {
       scene.remove(mesh);
@@ -577,6 +590,11 @@ export function createView(canvas) {
     });
     planetRings.length = 0;
     planetMeshes.forEach((mesh) => { mesh.visible = false; });
+    planetPaths.splice(0).forEach(dropPath);
+    dropPath(draftPath);
+    draftPath = null;
+    draftSpec = null;
+    if (planetLayer) planetLayer.clear();
     clearHz();
   }
   function buildPlanetRings(layout) {
@@ -672,6 +690,10 @@ export function createView(canvas) {
 
   const plateBank = createPlateBank(scene);
   plateBank.prime();
+  const planetLayer = createPlanetLayer(scene);
+  const planetPaths = [];
+  let draftSpec = null;
+  let draftPath = null;
   let grav = null;
   const orbitSeconds = reduce ? 180 : ORBIT_SECONDS;
   window.__orbitSeconds = orbitSeconds;
@@ -708,21 +730,115 @@ export function createView(canvas) {
     return planetParent(sys, placed, aroundStar ? 'star0' : 'bary');
   }
 
+  function focusOf(parent, placed) {
+    const stars = (sys && sys.stars) || [];
+    if (parent === 'bary' || parent === 'pair') {
+      const indexes = stars.length > 2 ? [0, 1] : stars.map((_, i) => i);
+      let mass = 0;
+      let x = 0;
+      let z = 0;
+      indexes.forEach((i) => {
+        const at = placed[i] || { x: 0, z: 0 };
+        const m = (stars[i] && stars[i].mass) || 1;
+        x += at.x * m;
+        z += at.z * m;
+        mass += m;
+      });
+      return { x: mass ? x / mass : 0, z: mass ? z / mass : 0, mass: mass || 1 };
+    }
+    const index = parent === 'star1' ? 1 : parent === 'star2' ? 2 : 0;
+    const at = placed[index] || { x: 0, z: 0 };
+    return { x: at.x, z: at.z, mass: (stars[index] && stars[index].mass) || 1 };
+  }
+
   function movePlanets() {
     planetMeshes.forEach((mesh) => { mesh.visible = false; });
     planetRings.forEach((ring) => { ring.visible = false; });
-    window.__planets = 0;
     const label = document.getElementById('hz-label');
-    if (mode !== 'system' || !sys || !hzMesh) {
+    if (mode !== 'system' || !sys || !grav) {
       if (hzMesh) hzMesh.visible = false;
       if (label) label.hidden = true;
+      planetLayer.clear();
+      window.__planets = 0;
+      window.__planetAt = null;
       return;
     }
-    const placed = grav ? grav.sample(simTime * grav.yearsPerSecond).filter((b) => b.kind !== 'planet') : [{ x: 0, z: 0 }];
-    const anchor = hzAnchor(placed);
-    hzMesh.position.set(anchor.x, 0, anchor.z);
-    hzMesh.visible = pathsOn;
-    if (label && !pathsOn) label.hidden = true;
+    const years = simTime * grav.yearsPerSecond;
+    const all = grav.sample(years);
+    const placed = all.filter((b) => b.kind !== 'planet');
+    const worlds = all.filter((b) => b.kind === 'planet');
+    if (hzMesh) {
+      const anchor = hzAnchor(placed);
+      hzMesh.position.set(anchor.x, 0, anchor.z);
+      hzMesh.visible = pathsOn;
+      if (label && !pathsOn) label.hidden = true;
+    }
+    const lights = placed.map((body, i) => ({
+      x: body.x,
+      z: body.z,
+      luminosity: (sys.stars[i] && sys.stars[i].luminosity) || 1
+    }));
+    const specs = sys.planets || [];
+    planetLayer.sync(worlds.map((body, i) => ({
+      spec: specs[i] || { id: 'earth', emission: 0, colorA: '#1d4e8f', colorB: '#3f8f55', atmosphere: '#7ec8ff' },
+      x: body.x,
+      z: body.z,
+      r: planetDisc((specs[i] && specs[i].radius) || 1, (specs[i] && specs[i].a) || 1, mapExtent)
+    })), lights, simTime);
+    worlds.forEach((body, i) => {
+      const group = planetPaths[i];
+      const spec = specs[i];
+      if (!group || !spec) return;
+      const focus = focusOf(spec.parent, placed);
+      group.position.set(focus.x, 0, focus.z);
+      group.visible = pathsOn;
+    });
+    if (draftSpec) {
+      const focus = focusOf(draftSpec.parent, placed);
+      const rel = relativeOrbit(draftSpec.a, draftSpec.e, years, focus.mass + (draftSpec.mass || 0));
+      const share = focus.mass / (focus.mass + (draftSpec.mass || 0));
+      planetLayer.showDraft({
+        spec: draftSpec,
+        x: focus.x + rel.x * share,
+        z: focus.z + rel.z * share,
+        r: planetDisc(draftSpec.radius, draftSpec.a, mapExtent)
+      }, lights, simTime);
+      if (draftPath) {
+        draftPath.position.set(focus.x, 0, focus.z);
+        draftPath.visible = pathsOn;
+      }
+    } else {
+      planetLayer.showDraft(null);
+    }
+    window.__planets = worlds.length;
+    if (worlds[0]) {
+      const screen = project(worlds[0].x, worlds[0].z);
+      const edge = project(worlds[0].x + (specs[0] ? planetDisc(specs[0].radius, specs[0].a, mapExtent) : 0.05), worlds[0].z);
+      window.__planetAt = {
+        x: worlds[0].x, z: worlds[0].z, sx: screen.x, sy: screen.y,
+        px: Math.max(2, Math.hypot(edge.x - screen.x, edge.y - screen.y))
+      };
+    } else window.__planetAt = null;
+  }
+
+  function previewPlanet(spec) {
+    dropPath(draftPath);
+    draftPath = null;
+    draftSpec = spec || null;
+    if (draftSpec) draftPath = makeEllipse(draftSpec.a, draftSpec.e || 0, false);
+  }
+
+  function commitPlanet(spec) {
+    if (!grav || !sys) return { ok: false, reason: 'Choose a star first.' };
+    const years = simTime * grav.yearsPerSecond;
+    const planet = Object.assign({}, spec, { epoch: years });
+    const verdict = grav.addPlanet(planet, years);
+    if (!verdict.ok) return verdict;
+    if (!sys.planets) sys.planets = [];
+    sys.planets.push(planet);
+    planetPaths.push(makeEllipse(planet.a, planet.e || 0, false));
+    previewPlanet(null);
+    return { ok: true };
   }
 
   function placeZoneLabel() {
@@ -1196,6 +1312,8 @@ export function createView(canvas) {
     setStar,
     setSystem,
     setPaths,
+    previewPlanet,
+    commitPlanet,
     primePlates: () => plateBank.prime(),
     bindPreviews,
     zoomBy,
