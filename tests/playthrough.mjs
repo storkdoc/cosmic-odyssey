@@ -175,10 +175,11 @@ async function voyage(page, name) {
   if (!before.includes('L')) throw new Error('luminosity missing ' + before);
   const hz = await page.locator('#derived-hz').innerText();
   if (!hz.includes('AU')) throw new Error('habitable zone missing ' + hz);
-  const spin0 = await page.evaluate(() => window.__spin || 0);
-  await page.waitForTimeout(700);
-  const spin1 = await page.evaluate(() => window.__spin || 0);
-  if (!(spin1 > spin0 + 0.04)) throw new Error('star mesh did not rotate ' + spin0 + ' ' + spin1);
+  await page.waitForFunction(() => {
+    const now = window.__spin || 0;
+    if (window.__spinMark == null) { window.__spinMark = now; return false; }
+    return now > window.__spinMark + 0.04;
+  }, null, { timeout: 5000 });
   await page.locator('#feat-mass').evaluate((el) => {
     el.value = el.max;
     el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -193,14 +194,16 @@ async function voyage(page, name) {
   await page.waitForTimeout(450);
   const held2 = await page.evaluate(() => window.__pose.dist);
   if (Math.abs(held2 - held) > 0.2) throw new Error('the camera zoomed on its own ' + held + ' ' + held2);
-  const theta0 = await page.evaluate(() => window.__pose.theta);
+  if (await page.evaluate(() => window.__pose.tilt) !== 0) throw new Error('camera is not top-down');
+  const pan0 = await page.evaluate(() => window.__pose.panX);
   const viewBox = await page.locator('#view').boundingBox();
   await page.mouse.move(viewBox.x + viewBox.width * 0.72, viewBox.y + 160);
   await page.mouse.down();
   await page.mouse.move(viewBox.x + viewBox.width * 0.72 + 140, viewBox.y + 160, { steps: 12 });
   await page.mouse.up();
-  const theta1 = await page.evaluate(() => window.__pose.theta);
-  if (Math.abs(theta1 - theta0) < 0.08) throw new Error('drag did not orbit ' + theta0 + ' ' + theta1);
+  const pan1 = await page.evaluate(() => window.__pose.panX);
+  if (Math.abs(pan1 - pan0) < 0.05) throw new Error('drag did not pan ' + pan0 + ' ' + pan1);
+  if (await page.evaluate(() => window.__pose.tilt) !== 0) throw new Error('drag tilted the camera');
   await page.waitForTimeout(400);
   const dist0 = parseFloat(await page.locator('#cam-dist').innerText());
   await click('#zoom-in');

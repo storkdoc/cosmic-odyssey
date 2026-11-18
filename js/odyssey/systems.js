@@ -199,3 +199,70 @@ export function pathCenters(layout, innerTurns) {
     { x: 0, z: 0, radius: layout.paths[2].radius }
   ];
 }
+
+/* Screen size follows diameter, with a floor so a remnant is still a point of light
+   and a ceiling so a giant does not cover the orbits. */
+export function plateScale(star) {
+  const diameter = Math.max(1e-8, star.diameter || (star.radius || 1) * 2);
+  const suns = diameter / 2;
+  return Math.max(0.28, Math.min(5.5, Math.sqrt(suns)));
+}
+
+/* Placeholder worlds on the rings. They use the habitable zone and, for more than
+   one star, the Holman and Mardling limits already stored on the layout. */
+export function placeholderPlanets(layout) {
+  if (!layout || !layout.stars || !layout.stars.length) return [];
+  const star = layout.stars[0];
+  const hz = star.hz || { inner: 1, outer: 1.7 };
+  const mass = Math.max(0.2, layout.stars.reduce((s, item) => s + (item.mass || 1), 0));
+  const world = (a, parent, color, radius) => ({
+    a,
+    parent,
+    color,
+    radius,
+    period: Math.sqrt(Math.pow(Math.max(0.05, a), 3) / mass)
+  });
+  if (layout.count === 1) {
+    const inner = Math.max(0.35, hz.inner * 0.72);
+    const mid = Math.max(inner + 0.4, (hz.inner + hz.outer) / 2);
+    const outer = Math.max(mid + 0.6, hz.outer * 1.7);
+    return [
+      world(inner, 'star0', '#d7c4a8', 0.45),
+      world(mid, 'star0', '#7eb6d6', 0.55),
+      world(outer, 'star0', '#e2c27a', 0.85)
+    ];
+  }
+  if (layout.count === 2 && layout.holman) {
+    const around = Math.max(0.08, layout.holman.sType * 0.62);
+    const both = layout.holman.pType * 1.2;
+    return [
+      world(around, 'star0', '#d7c4a8', 0.4),
+      world(both, 'bary', '#e2c27a', 0.7)
+    ];
+  }
+  const a = Math.max(layout.separation * 2.4, Math.min(layout.outerAU * 0.42, layout.separation * (layout.crit || 3) * 1.15));
+  return [world(a, 'inner-bary', '#7eb6d6', 0.5)];
+}
+
+export function planetParent(layout, placed, parent, innerTurns) {
+  if (!placed.length) return { x: 0, z: 0 };
+  if (parent === 'star0') return placed[0];
+  if (parent === 'bary' || !layout || layout.count < 2) {
+    let x = 0;
+    let z = 0;
+    let m = 0;
+    placed.forEach((p, i) => {
+      const mass = layout.stars[i].mass || 1;
+      x += p.x * mass;
+      z += p.z * mass;
+      m += mass;
+    });
+    return { x: x / m, z: z / m };
+  }
+  const m1 = layout.stars[0].mass || 1;
+  const m2 = layout.stars[1].mass || 1;
+  return {
+    x: (placed[0].x * m1 + placed[1].x * m2) / (m1 + m2),
+    z: (placed[0].z * m1 + placed[1].z * m2) / (m1 + m2)
+  };
+}

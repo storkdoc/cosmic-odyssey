@@ -1,5 +1,5 @@
 import { derive, defaultsFor } from '../js/odyssey/stars.js';
-import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU } from '../js/odyssey/systems.js';
+import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale } from '../js/odyssey/systems.js';
 
 let fails = 0;
 const check = (ok, msg) => { if (!ok) fails++; console.log(ok ? '  PASS' : '  FAIL', msg); };
@@ -46,6 +46,15 @@ check(!crushed.stable, 'a tight triple is not called stable');
 const giants = designSystem([star('giant'), star('giant'), star('g')]);
 check(giants.stable, 'two giants and a sun still get a stable hierarchy');
 check(giants.separation > 2 * star('giant').radius * RSUN_AU, 'giant photospheres stay apart');
+
+const single = designSystem([star('g')]);
+const worlds = placeholderPlanets(single);
+check(worlds.length >= 2, 'a single star has placeholder planets');
+check(worlds.every((p) => p.a > 0.2 && p.period > 0), 'planets sit on orbits with a period');
+const binaryPlanets = placeholderPlanets(binary);
+check(binaryPlanets.some((p) => p.parent === 'bary' && p.a > binary.holman.pType), 'a circumbinary world stays outside the Holman limit');
+check(plateScale({ diameter: 4 }) > plateScale({ diameter: 2 }), 'a larger diameter draws a larger plate');
+check(plateScale({ radius: 0.00002 }) >= 0.28, 'a neutron star plate stays visible');
 
 const none = designSystem([]);
 check(none.architecture === 'rogue' && none.stable && /starless/.test(none.note), 'zero stars is a rogue system');

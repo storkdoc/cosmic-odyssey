@@ -39,22 +39,70 @@ export function createGFilm(root) {
     gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true });
     if (gl) pack = buildPack(gl);
   }
-  const api = { failed: false, webm, ready: false };
+  const tint = document.createElement('div');
+  tint.className = 'plate-tint';
+  root.append(tint);
+  const api = { failed: false, webm, ready: false, showing: false, fallback: false };
+  let currentType = '';
   let started = false;
   let lead = 0;
   let handoff = false;
-  const src = webm ? 'assets/video/g-star.webm' : 'assets/video/g-star-pack.mp4';
+  const fallbackSrc = webm ? 'assets/video/g-star.webm' : 'assets/video/g-star-pack.mp4';
+  const missing = new Set();
+  let src = fallbackSrc;
 
-  function load() {
-    if (started) return;
+  function chooseSrc(type) {
+    const name = type || 'g';
+    if (name === 'g' || missing.has(name)) return { url: fallbackSrc, fallback: name !== 'g' };
+    return {
+      url: webm ? 'assets/video/' + name + '.webm' : 'assets/video/' + name + '-pack.mp4',
+      fallback: false
+    };
+  }
+
+  a.addEventListener('error', () => {
+    if (currentType && currentType !== 'g' && !missing.has(currentType)) {
+      missing.add(currentType);
+      api.fallback = true;
+      src = fallbackSrc;
+      a.src = fallbackSrc;
+      b.src = fallbackSrc;
+      const again = a.play();
+      if (again && again.catch) again.catch(() => { api.failed = true; root.dataset.failed = '1'; });
+      return;
+    }
+    api.failed = true;
+    root.dataset.failed = '1';
+  });
+
+  /* Types whose plates are in the repo. Others use the G plate, tinted, until
+     assets/video/<type>.webm and <type>-pack.mp4 are added here. */
+  const HAVE = {
+    g: { webm: 'assets/video/g-star.webm', pack: 'assets/video/g-star-pack.mp4' }
+  };
+  function sourceFor(type) {
+    const name = type || 'g';
+    const row = HAVE[name];
+    if (row && !missing.has(name)) return { url: webm ? row.webm : row.pack, fallback: false };
+    return { url: webm ? HAVE.g.webm : HAVE.g.pack, fallback: name !== 'g' };
+  }
+
+  function load(type) {
+    const name = type || currentType || 'g';
+    const pick = sourceFor(name);
+    const next = pick.url;
+    if (started && next === src && currentType === name && !api.failed) return;
     started = true;
+    api.failed = false;
+    api.fallback = !!pick.fallback;
+    src = next;
+    currentType = name;
     a.src = src;
     b.src = src;
     const kick = () => {
       const p = a.play();
       if (p && p.catch) p.catch(() => { api.failed = true; root.dataset.failed = '1'; });
     };
-    a.addEventListener('error', () => { api.failed = true; root.dataset.failed = '1'; });
     if (a.readyState >= 2) kick();
     else a.addEventListener('canplay', kick, { once: true });
     a.load();
@@ -132,12 +180,27 @@ export function createGFilm(root) {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  api.prime = () => load();
-  api.sync = (show) => {
-    const on = !!(show && !api.failed);
+  api.prime = () => load(currentType || 'g');
+  api.layout = (plates) => {
+    const item = plates && plates[0];
+    const on = !!(item && !api.failed);
+    api.showing = on;
     root.hidden = !on;
-    if (on) load();
+    if (!on) return;
+    root.style.left = item.x + 'px';
+    root.style.top = item.y + 'px';
+    root.style.width = item.w + 'px';
+    root.style.height = item.h + 'px';
+    root.style.right = 'auto';
+    root.style.bottom = 'auto';
+    if (item.type !== currentType) load(item.type);
+    else load(item.type);
+    const tintOn = api.fallback && item.type !== 'g';
+    tint.classList.toggle('on', tintOn);
+    tint.style.background = item.color || '#ffb15a';
+    window.__plateSrc = src;
   };
+  api.sync = (show) => api.layout(show ? [{ type: 'g', x: 0, y: 0, w: 400, h: 400, color: '#ffb15a' }] : null);
   api.tick = tick;
   setFade(1, 0);
   return api;

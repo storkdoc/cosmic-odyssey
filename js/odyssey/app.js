@@ -36,8 +36,9 @@ function loop(now) {
   last = now;
   view.frame(dt);
   const pose = view.pose();
-  film.sync(pose.film);
+  film.layout(pose.plates);
   film.tick();
+  view.setPlatesCover(film.showing);
   audio.tick();
   const dist = document.getElementById('cam-dist');
   if (dist) dist.textContent = view.distance().toFixed(1);
@@ -176,6 +177,7 @@ function selectType(id) {
   const type = starType(id);
   mountFeatures(type);
   features.hidden = false;
+  pathsBtn.hidden = false;
   paintDerived();
   if (window.MoodSticker) MoodSticker.usage('star_pick', { type: id });
 }
@@ -227,8 +229,8 @@ function finish() {
   if (sys.count >= 2) view.setSystem(sys);
   else if (sys.count === 1) view.setStar(built[0]);
   else view.setSystem(sys);
-  document.getElementById('next-copy').textContent = sys.note + ' Next: planets (coming soon).';
-  pathsBtn.hidden = sys.count < 2;
+  document.getElementById('next-copy').textContent = sys.note + ' Placeholder worlds already move on the rings. Next: planets (coming soon).';
+  pathsBtn.hidden = sys.count < 1;
   pathsBtn.setAttribute('aria-pressed', 'true');
   pathsBtn.textContent = 'Orbits on';
   view.setPaths(true);
