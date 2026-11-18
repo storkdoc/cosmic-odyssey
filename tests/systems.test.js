@@ -1,5 +1,5 @@
 import { derive, defaultsFor } from '../js/odyssey/stars.js';
-import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale } from '../js/odyssey/systems.js';
+import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale, plateRadius, systemExtent } from '../js/odyssey/systems.js';
 
 let fails = 0;
 const check = (ok, msg) => { if (!ok) fails++; console.log(ok ? '  PASS' : '  FAIL', msg); };
@@ -61,6 +61,17 @@ check(giantPlate / speck > 25, 'a giant dwarfs a neutron star ' + giantPlate + '
 
 const none = designSystem([]);
 check(none.architecture === 'rogue' && none.stable && /starless/.test(none.note), 'zero stars is a rogue system');
+
+single.planets = worlds;
+const ext = systemExtent(single);
+check(ext > worlds[worlds.length - 1].a, 'the frame reaches past the outer world ' + ext);
+const sunPlate = plateRadius(star('g'), ext);
+const nsPlate = plateRadius(star('ns'), ext);
+const giantOnMap = plateRadius(star('giant'), ext);
+check(sunPlate < ext * 0.2 && sunPlate > ext * 0.04, 'a sun is a fraction of the map ' + sunPlate);
+check(nsPlate >= ext * 0.02 && nsPlate < sunPlate * 0.5, 'a neutron star stays visible and smaller than the sun ' + nsPlate);
+check(giantOnMap > sunPlate && giantOnMap <= ext * 0.18 + 1e-9, 'a giant is larger and still inside the map ' + giantOnMap);
+check(systemExtent(none) > 0, 'a rogue map still has a frame');
 
 if (fails) process.exit(1);
 console.log('systems ok');

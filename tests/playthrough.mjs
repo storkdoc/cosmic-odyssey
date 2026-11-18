@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { extname, join, normalize } from 'node:path';
-import { chromium, devices } from 'playwright-core';
+import { chromium, webkit, devices } from 'playwright-core';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.ico': 'image/x-icon' };
@@ -142,6 +142,27 @@ async function voyage(page, name) {
     ]);
     await popup.close();
   }
+  const touchSurface = await page.evaluate(() => {
+    const el = document.elementFromPoint(Math.round(window.innerWidth * 0.72), 130);
+    const gesture = document.getElementById('gesture');
+    const meta = document.querySelector('meta[name="viewport"]').content;
+    const blocked = document.createEvent ? true : false;
+    const start = new Event('gesturestart', { bubbles: true, cancelable: true });
+    document.dispatchEvent(start);
+    return {
+      hit: el && el.id,
+      action: getComputedStyle(gesture).touchAction,
+      meta,
+      plates: getComputedStyle(document.getElementById('g-film')).pointerEvents,
+      gestureBlocked: start.defaultPrevented,
+      blocked
+    };
+  });
+  if (touchSurface.hit !== 'gesture') throw new Error('touches hit ' + touchSurface.hit + ' instead of the map');
+  if (touchSurface.action !== 'none') throw new Error('touch-action ' + touchSurface.action);
+  if (!/user-scalable=no/.test(touchSurface.meta) || !/maximum-scale=1/.test(touchSurface.meta)) throw new Error('viewport ' + touchSurface.meta);
+  if (touchSurface.plates !== 'none') throw new Error('plates take touches');
+  if (!touchSurface.gestureBlocked) throw new Error('gesture zoom was not blocked');
   const asked = await page.locator('#count h2').innerText();
   if (!/how many stars/i.test(asked)) throw new Error('count step missing: ' + asked);
   const vp = page.viewportSize();
@@ -223,6 +244,21 @@ async function voyage(page, name) {
     await click('#confirm-star');
   }
   await page.waitForSelector('#next:not([hidden])');
+  await page.waitForFunction(() => window.__pose && window.__pose.mode === 'system' && window.__pose.tilt === 0);
+  const framed = await page.evaluate(() => window.__pose);
+  if (framed.count > 0) {
+    if (!(framed.orbits >= 1)) throw new Error('orbit rings missing');
+    if (!(framed.hz)) throw new Error('habitable zone missing');
+    if (!(framed.dist > framed.extent * 0.8 && Math.abs(framed.dist - framed.fit) / framed.fit < 0.25)) {
+      throw new Error('the map is not framed ' + framed.dist + ' fit ' + framed.fit + ' extent ' + framed.extent);
+    }
+  }
+  if (await page.evaluate(() => window.__pose.tilt) !== 0) throw new Error('the map tilted');
+  if (name !== 'desktop') {
+    const sheet = await page.locator('#next .sheet').boundingBox();
+    const phone = page.viewportSize();
+    if (!sheet || sheet.height > phone.height * 0.25) throw new Error('selection panel covers the map ' + (sheet && sheet.height));
+  }
   const next = await page.locator('#next-copy').innerText();
   if (!/Next: planets/.test(next)) throw new Error('next chapter ' + next);
   if (many === '2' && !/Holman/.test(next)) throw new Error('binary note ' + next);
@@ -327,9 +363,146 @@ try {
     }
     await context.close();
   }
+  const iphone = { ...devices['iPhone 13'], hasTouch: true, isMobile: true };
+  try {
+    const context = await browser.newContext(iphone);
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    await assertFingers(page, 'iphone-cdp');
+    await context.close();
+  } catch (err) {
+    failed++;
+    console.log('iphone-cdp', 'FAIL', err.message.split('\n')[0]);
+  }
+  try {
+    const kit = await webkit.launch({ headless: true });
+    const context = await kit.newContext(iphone);
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    await assertFingers(page, 'iphone-webkit');
+    await context.close();
+    await kit.close();
+  } catch (err) {
+    failed++;
+    console.log('iphone-webkit', 'FAIL', err.message.split('\n')[0]);
+  }
 } finally {
   await browser.close();
   server.close();
 }
+async function finger(page, steps) {
+  try {
+    const cdp = await page.context().newCDPSession(page);
+    for (const step of steps) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: step.type,
+        touchPoints: step.points.map((point) => ({ x: point.x, y: point.y, id: point.id }))
+      });
+      if (step.wait) await page.waitForTimeout(step.wait);
+    }
+    return 'cdp';
+  } catch (err) { /* WebKit has no touch CDP, so the page receives the fallback events. */ }
+  await page.evaluate(async (script) => {
+    const target = document.getElementById('gesture');
+    const listFor = (points) => {
+      if (document.createTouch && document.createTouchList) {
+        return document.createTouchList(...points.map((point) => document.createTouch(
+          window, target, point.id, point.x, point.y, point.x, point.y
+        )));
+      }
+      return points.map((point) => new Touch({
+        identifier: point.id, target, clientX: point.x, clientY: point.y, pageX: point.x, pageY: point.y, radiusX: 8, radiusY: 8, force: 1
+      }));
+    };
+    const empty = () => (document.createTouchList ? document.createTouchList() : []);
+    const fire = (type, points) => {
+      const dom = { touchStart: 'touchstart', touchMove: 'touchmove', touchEnd: 'touchend', touchCancel: 'touchcancel' }[type] || type;
+      const ended = dom === 'touchend' || dom === 'touchcancel';
+      const list = ended ? empty() : listFor(points);
+      target.dispatchEvent(new TouchEvent(dom, {
+        bubbles: true,
+        cancelable: true,
+        touches: list,
+        targetTouches: list,
+        changedTouches: list
+      }));
+    };
+    for (const step of script) {
+      fire(step.type, step.points);
+      if (step.wait) await new Promise((resolve) => setTimeout(resolve, step.wait));
+    }
+  }, steps);
+  return 'touch';
+}
+
+async function until(page, pred) {
+  const start = Date.now();
+  while (Date.now() - start < 8000) {
+    if (await page.evaluate(pred)) return;
+    await page.waitForTimeout(40);
+  }
+  const pose = await page.evaluate(() => ({
+    target: window.__pose && window.__pose.target,
+    dist: window.__pose && window.__pose.dist,
+    pan: window.__pose && window.__pose.panX,
+    mark: window.__mark
+  }));
+  throw new Error('timed out ' + JSON.stringify(pose));
+}
+
+async function assertFingers(page, label) {
+  await page.waitForSelector('#gesture');
+  await page.waitForFunction(() => window.__pose && window.__pose.dist > 0);
+  const hit = await page.evaluate(() => {
+    const el = document.elementFromPoint(Math.round(window.innerWidth * 0.55), 150);
+    return el && el.id;
+  });
+  if (hit !== 'gesture') throw new Error(label + ' hit ' + hit);
+  const open = await page.evaluate(() => window.__pose.target);
+  await page.click('#zoom-in');
+  await page.evaluate((start) => { window.__mark = start; }, open);
+  await until(page, () => window.__pose.target < window.__mark * 0.9);
+  const before = await page.evaluate(() => ({ dist: window.__pose.dist, pan: window.__pose.panX, tilt: window.__pose.tilt, target: window.__pose.target }));
+  await page.evaluate(() => {
+    const target = document.getElementById('gesture');
+    const fire = (type, id, px, py) => target.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: id, pointerType: 'touch', clientX: px, clientY: py, isPrimary: id === 7
+    }));
+    fire('pointerdown', 7, 150, 150);
+    fire('pointerdown', 8, 150, 230);
+    fire('pointermove', 7, 150, 90);
+    fire('pointermove', 8, 150, 310);
+    fire('pointerup', 7, 150, 90);
+    fire('pointerup', 8, 150, 310);
+  });
+  await page.evaluate((start) => { window.__mark = start; }, before.target);
+  await until(page, () => window.__pose.target < window.__mark * 0.75);
+  const pointed = await page.evaluate(() => window.__pose.target);
+  const x = Math.round(page.viewportSize().width * 0.55);
+  const y = 220;
+  const pinch = [{ type: 'touchStart', points: [{ id: 1, x, y: y - 30 }, { id: 2, x, y: y + 30 }], wait: 40 }];
+  for (let i = 1; i <= 6; i++) {
+    const spread = 30 + i * 16;
+    pinch.push({ type: 'touchMove', points: [{ id: 1, x, y: y - spread }, { id: 2, x, y: y + spread }], wait: 32 });
+  }
+  pinch.push({ type: 'touchEnd', points: [], wait: 50 });
+  const via = await finger(page, pinch);
+  await page.evaluate((start) => { window.__mark = start; }, pointed);
+  await until(page, () => window.__pose.target < window.__mark * 0.72);
+  if (await page.evaluate(() => window.__pose.tilt) !== 0) throw new Error(label + ' pinch tilted the camera');
+  const pan0 = await page.evaluate(() => window.__pose.panX);
+  const drag = [
+    { type: 'touchStart', points: [{ id: 1, x, y }], wait: 30 }
+  ];
+  for (let i = 1; i <= 5; i++) drag.push({ type: 'touchMove', points: [{ id: 1, x: x - i * 28, y }], wait: 28 });
+  drag.push({ type: 'touchEnd', points: [], wait: 40 });
+  await finger(page, drag);
+  await page.evaluate((start) => { window.__mark = start; }, pan0);
+  await until(page, () => Math.abs(window.__pose.panX - window.__mark) > 0.08);
+  const pan1 = await page.evaluate(() => window.__pose.panX);
+  if (await page.evaluate(() => window.__pose.tilt) !== 0) throw new Error(label + ' drag tilted the camera');
+  console.log(label, via, 'pinch', before.dist.toFixed(2), '->', (await page.evaluate(() => window.__pose.dist)).toFixed(2), 'pan', pan0.toFixed(2), '->', pan1.toFixed(2));
+}
+
 if (failed) process.exit(1);
 console.log('playthrough passed');
