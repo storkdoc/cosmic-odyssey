@@ -2,6 +2,7 @@
 import { createView } from './view.js';
 import { STAR_TYPES, defaultsFor, derive, formatYears, starType, iscoRadii } from './stars.js';
 import { designSystem } from './systems.js';
+import { loadPlanetTypes, planetType, planetTypes, defaultPlanet, normalizePlanet, explainPlanet, orbitLight, distanceRange, zoneSentence } from './planets.js';
 import { createAudio } from '../audio.js';
 
 const KEY = 'cosmic-odyssey.star';
@@ -26,6 +27,9 @@ if (window.MoodSticker) {
 let spec = null;
 let starCount = 1;
 let built = [];
+let layout = null;
+let planetDraft = null;
+const planetNames = [];
 let last = performance.now();
 let flareLock = 0;
 let returnTimer = 0;
@@ -222,9 +226,11 @@ function beginStar(index) {
 
 function finish() {
   const sys = designSystem(built);
+  layout = sys;
   view.setSystem(sys);
   document.body.classList.add('map-open');
-  document.getElementById('next-copy').textContent = sys.note + ' Next: planets (coming soon).';
+  document.getElementById('next-copy').textContent = sys.note + ' Next: planets.';
+  openPlanets();
   pathsBtn.hidden = sys.count < 1;
   pathsBtn.setAttribute('aria-pressed', 'true');
   pathsBtn.textContent = 'Orbits on';
@@ -259,6 +265,157 @@ document.getElementById('confirm-star').addEventListener('click', () => {
   built.push(Object.assign({}, spec, d));
   if (built.length < starCount) beginStar(built.length);
   else finish();
+});
+
+function showPlanetWarning() {
+  const warn = document.getElementById('planet-warn');
+  const zone = document.getElementById('planet-zone');
+  if (!planetDraft) return { ok: false, text: '' };
+  if (zone) zone.textContent = zoneSentence(layout, planetDraft);
+  if (!warn) return explainPlanet(layout, planetDraft);
+  const verdict = explainPlanet(layout, planetDraft);
+  warn.textContent = verdict.ok ? '' : verdict.text;
+  return verdict;
+}
+
+function parentChoices() {
+  const stars = (layout && layout.stars) || [];
+  const choices = [];
+  stars.forEach((star, i) => {
+    const id = i === 0 ? 'star0' : i === 1 ? 'star1' : 'star2';
+    choices.push({ id, label: stars.length > 1 ? starType(star.type).title : 'The star' });
+  });
+  if (stars.length > 1) choices.push({ id: 'bary', label: stars.length > 2 ? 'Inner pair' : 'Both stars' });
+  return choices;
+}
+
+function readPlanetForm() {
+  const name = document.getElementById('planet-name');
+  if (name && planetDraft) planetDraft.name = name.value;
+  return normalizePlanet(planetType(planetDraft.id), planetDraft, layout);
+}
+
+function refreshPlanet() {
+  if (!planetDraft || !layout) return;
+  planetDraft = readPlanetForm();
+  const name = document.getElementById('planet-name');
+  if (name && name.value !== planetDraft.name) name.value = planetDraft.name;
+  view.previewPlanet(planetDraft);
+  showPlanetWarning();
+}
+
+function mountPlanet(id, keep) {
+  const type = planetType(id);
+  const parent = (planetDraft && planetDraft.parent) || 'star0';
+  if (!keep || !planetDraft || planetDraft.id !== id) {
+    planetDraft = normalizePlanet(type, defaultPlanet(type, layout, parent, planetNames), layout);
+  } else {
+    planetDraft = normalizePlanet(type, planetDraft, layout);
+  }
+  document.querySelectorAll('#planet-menu .star-card').forEach((card) => {
+    card.classList.toggle('on', card.dataset.type === id);
+  });
+  const form = document.getElementById('planet-form');
+  form.hidden = false;
+  const name = document.getElementById('planet-name');
+  name.value = planetDraft.name;
+  const parents = document.getElementById('planet-parents');
+  parents.textContent = '';
+  parentChoices().forEach((choice) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = choice.label;
+    button.classList.toggle('on', choice.id === planetDraft.parent);
+    button.addEventListener('click', () => {
+      const dist = distanceRange(type, orbitLight(layout, choice.id));
+      planetDraft.parent = choice.id;
+      planetDraft.a = (dist[0] + dist[1]) / 2;
+      mountPlanet(id, true);
+    });
+    parents.append(button);
+  });
+  const box = document.getElementById('planet-sliders');
+  box.textContent = '';
+  const light = orbitLight(layout, planetDraft.parent);
+  const dist = distanceRange(type, light);
+  const rows = [
+    ['planet-radius', 'Radius', type.radius[0], type.radius[1], planetDraft.radius, (type.radius[1] - type.radius[0]) / 80, (v) => v.toFixed(2) + ' R\u2295', 'radius'],
+    ['planet-mass', 'Mass', type.mass[0], type.mass[1], planetDraft.massEarth, (type.mass[1] - type.mass[0]) / 80, (v) => (v >= 10 ? v.toFixed(0) : v.toFixed(2)) + ' M\u2295', 'massEarth'],
+    ['planet-a', 'Distance', dist[0], dist[1], planetDraft.a, Math.max((dist[1] - dist[0]) / 120, 0.001), (v) => formatAU(v), 'a'],
+    ['planet-e', 'Eccentricity', type.eccentricity[0], type.eccentricity[1], planetDraft.e, 0.005, (v) => v.toFixed(2), 'e'],
+    ['planet-tilt', 'Axial tilt', 0, 35, planetDraft.tilt, 1, (v) => Math.round(v) + '\u00b0', 'tilt']
+  ];
+  rows.forEach(([sid, label, min, max, value, step, format, key]) => {
+    const wrap = document.createElement('label');
+    wrap.className = 'slider';
+    const title = document.createElement('span');
+    title.textContent = label;
+    const read = document.createElement('span');
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(Math.max(step, 1e-4));
+    input.value = String(value);
+    const write = () => { read.textContent = format(Number(input.value)); };
+    write();
+    input.addEventListener('input', () => {
+      planetDraft[key] = Number(input.value);
+      write();
+      refreshPlanet();
+    });
+    wrap.append(title, read, input);
+    box.append(wrap);
+  });
+  name.oninput = () => refreshPlanet();
+  refreshPlanet();
+}
+
+async function openPlanets() {
+  const menu = document.getElementById('planet-menu');
+  if (!menu || menu.dataset.ready) return;
+  menu.dataset.ready = '1';
+  const types = planetTypes().length ? planetTypes() : await loadPlanetTypes();
+  types.forEach((type) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'star-card';
+    card.dataset.type = type.id;
+    const mini = document.createElement('img');
+    mini.className = 'planet-swatch';
+    mini.alt = '';
+    mini.src = type.poster;
+    const title = document.createElement('strong');
+    title.textContent = type.title;
+    const fact = document.createElement('span');
+    fact.textContent = type.blurb;
+    card.append(mini, title, fact);
+    card.addEventListener('click', () => mountPlanet(type.id));
+    menu.append(card);
+  });
+}
+
+document.getElementById('add-planet').addEventListener('click', () => {
+  if (!planetDraft || !layout) return;
+  refreshPlanet();
+  const verdict = explainPlanet(layout, planetDraft);
+  const warn = document.getElementById('planet-warn');
+  if (!verdict.ok) {
+    warn.textContent = verdict.text;
+    return;
+  }
+  const placed = view.commitPlanet(planetDraft);
+  if (!placed.ok) {
+    warn.textContent = explainPlanet(layout, planetDraft).text || 'This orbit would not stay.';
+    return;
+  }
+  const placedName = planetDraft.name;
+  planetNames.push(placedName);
+  const next = defaultPlanet(planetType(planetDraft.id), layout, planetDraft.parent, planetNames);
+  planetDraft.name = next.name;
+  document.getElementById('planet-name').value = next.name;
+  refreshPlanet();
+  warn.textContent = placedName + ' is in orbit.';
 });
 
 document.getElementById('zoom-in').addEventListener('click', () => view.zoomBy(0.82));

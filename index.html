@@ -61,7 +61,18 @@
     <div class="sheet">
       <button type="button" id="next-fold" aria-expanded="false">System</button>
       <h2>System</h2>
-      <p id="next-copy">Next: planets (coming soon).</p>
+      <p id="next-copy">Next: planets.</p>
+      <div id="planet-studio">
+        <div id="planet-menu" class="star-menu"></div>
+        <div id="planet-form" hidden>
+          <label class="slider">Name<input id="planet-name" type="text" maxlength="32" autocomplete="off"></label>
+          <div id="planet-parents" class="parent-row"></div>
+          <div id="planet-sliders"></div>
+          <p id="planet-zone" class="note"></p>
+          <p id="planet-warn" class="warn"></p>
+          <button class="primary" id="add-planet" type="button">Place planet</button>
+        </div>
+      </div>
     </div>
   </section>
 

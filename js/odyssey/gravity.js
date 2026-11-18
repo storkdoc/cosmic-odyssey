@@ -207,7 +207,7 @@ export function createGravity(layout, options = {}) {
   const seconds = options.secondsPerOrbit || 75;
   const period = layout.periodYears > 0 ? layout.periodYears : 1;
   const rate = formatTimeRate(period / seconds);
-  const dt = period / 2000;
+  let dt = period / 2000;
   const stars = layout.stars || [];
   let bodies = stars.length > 1
     ? keplerStars(layout, 0).map((b) => Object.assign({ kind: 'star' }, b))
@@ -249,7 +249,7 @@ export function createGravity(layout, options = {}) {
     const years = Math.max(0, targetYears || 0);
     if (binaryAnalytic()) return centered(keplerStars(layout, years));
     let guard = 0;
-    while (physicsTime < years - 1e-15 && guard < 64) {
+    while (physicsTime < years - 1e-15 && guard < 4096) {
       previous = cloneBodies(bodies);
       leapfrog(bodies, dt);
       physicsTime += dt;
@@ -261,40 +261,63 @@ export function createGravity(layout, options = {}) {
 
   return {
     get bodies() { return bodies; },
-    dt,
+    get dt() { return dt; },
     period,
     yearsPerSecond: rate.yearsPerSecond,
     rateText: rate.text,
     sample,
-    addPlanet(planet) {
+    addPlanet(planet, atYears) {
       const verdict = assessPlanet(layout, planet);
       if (!verdict.ok) return verdict;
+      const years = Math.max(0, atYears || 0);
+      const onlyStars = bodies.every((b) => b.kind === 'star');
+      if (stars.length === 2 && onlyStars) {
+        bodies = keplerStars(layout, years).map((b) => Object.assign({ kind: 'star' }, b));
+        physicsTime = years;
+      } else if (stars.length > 2 && onlyStars) {
+        let guard = 0;
+        while (physicsTime < years - 1e-15 && guard < 4096) {
+          leapfrog(bodies, dt);
+          physicsTime += dt;
+          guard += 1;
+        }
+      }
+      const planetPeriod = keplerPeriod(planet.a, (planet.mass || 0) + centralMass(bodies, planet));
+      dt = Math.min(dt, planetPeriod / 2000);
       placePlanet(bodies, layout, planet);
       pinBarycenter(bodies);
       initial = cloneBodies(bodies);
       previous = cloneBodies(bodies);
-      physicsTime = 0;
+      physicsTime = Math.max(physicsTime, years);
       return verdict;
     }
   };
 }
 
-function placePlanet(bodies, layout, planet) {
+function hostStars(bodies, planet) {
+  const stars = bodies.filter((b) => b.kind === 'star');
   const aroundPair = planet.parent === 'bary' || planet.parent === 'pair';
-  let origin = bodies[planet.primary || 0] || bodies[0];
-  let central = origin.mass;
-  if (aroundPair && bodies.length >= 2) {
-    const cm = barycenter(bodies.filter((b) => b.kind === 'star'));
-    origin = { x: cm.x, z: cm.z, vx: cm.vx, vz: cm.vz };
-    central = bodies.filter((b) => b.kind === 'star').reduce((s, b) => s + b.mass, 0);
-  }
-  const rel = relativeOrbit(planet.a, planet.e || 0, 0, central + (planet.mass || 0));
+  if (aroundPair) return stars.length > 2 ? stars.slice(0, 2) : stars;
+  const origin = bodies[planet.primary || 0] || stars[0];
+  return origin ? [origin] : stars;
+}
+
+function centralMass(bodies, planet) {
+  return hostStars(bodies, planet).reduce((sum, b) => sum + b.mass, 0) || 1;
+}
+
+function placePlanet(bodies, layout, planet) {
+  const hosts = hostStars(bodies, planet);
+  const cm = barycenter(hosts);
+  const origin = { x: cm.x, z: cm.z, vx: cm.vx, vz: cm.vz };
+  const central = cm.mass;
+  const rel = relativeOrbit(planet.a, planet.e || 0, planet.epoch || 0, central + (planet.mass || 0));
   const mass = planet.mass > 0 ? planet.mass : 3e-6;
   bodies.push({
     kind: 'planet',
     mass,
     name: planet.name || 'planet',
-    parent: aroundPair ? 'bary' : 'star',
+    parent: planet.parent === 'bary' || planet.parent === 'pair' ? 'bary' : 'star',
     x: origin.x + rel.x * central / (central + mass),
     z: origin.z + rel.z * central / (central + mass),
     vx: origin.vx + rel.vx * central / (central + mass),

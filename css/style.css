@@ -76,6 +76,27 @@ canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   height: 182px;
   pointer-events: none;
 }
+#planet-bank {
+  position: fixed;
+  left: 0;
+  top: 200px;
+  width: 320px;
+  height: 182px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+#planet-bank video { width: 320px; height: 182px; pointer-events: none; }
+img.planet-swatch {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  margin: 0 auto 0.25rem;
+  background: transparent;
+}
 input[type="range"] { touch-action: pan-x; }
 button, a { touch-action: manipulation; }
 .sp-word { color: #EEEDE7; font-weight: 600; }
@@ -158,6 +179,9 @@ label.slider input { grid-column: 1 / -1; width: 100%; }
 .art-3::after { width: 9px; height: 9px; left: calc(50% - 2px); top: 16px; background: #ff7a3c; }
 .art-3 { background: radial-gradient(circle at 70% 30%, #fff4ea 0 5px, transparent 6px); }
 .star-menu { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.6rem; }
+#planet-name { width: 100%; margin-top: 0.2rem; }
+.parent-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0 0.2rem; }
+.parent-row button.on { border-color: var(--orange); }
 .star-card { flex: 0 0 7.4rem; text-align: center; padding: 0.4rem; }
 .mini { width: 84px; height: 84px; display: block; margin: 0 auto 0.25rem; background: transparent; }
 #credit-list { padding: 0; list-style: none; }
