@@ -54,7 +54,10 @@ check(worlds.every((p) => p.a > 0.2 && p.period > 0), 'planets sit on orbits wit
 const binaryPlanets = placeholderPlanets(binary);
 check(binaryPlanets.some((p) => p.parent === 'bary' && p.a > binary.holman.pType), 'a circumbinary world stays outside the Holman limit');
 check(plateScale({ diameter: 4 }) > plateScale({ diameter: 2 }), 'a larger diameter draws a larger plate');
-check(plateScale({ radius: 0.00002 }) >= 0.28, 'a neutron star plate stays visible');
+const speck = plateScale({ radius: 0.00002 });
+const giantPlate = plateScale({ diameter: 80 });
+check(speck >= 0.07 && speck < plateScale({ diameter: 2 }) * 0.2, 'a neutron star stays a small readable speck ' + speck);
+check(giantPlate / speck > 25, 'a giant dwarfs a neutron star ' + giantPlate + ' ' + speck);
 
 const none = designSystem([]);
 check(none.architecture === 'rogue' && none.stable && /starless/.test(none.note), 'zero stars is a rogue system');

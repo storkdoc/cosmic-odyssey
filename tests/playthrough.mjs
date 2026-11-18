@@ -44,6 +44,8 @@ async function assertFilmClear(page) {
   if (!(t1 > t0)) throw new Error('G-star film is not playing');
   const src = await page.evaluate(() => document.querySelector('#g-film video').currentSrc);
   if (!/g-star/.test(src)) throw new Error('film source ' + src);
+  const poster = await page.evaluate(() => document.querySelector('#g-film video').poster);
+  if (!/g-star-poster/.test(poster)) throw new Error('poster ' + poster);
   const spot = await page.evaluate(() => {
     const film = document.getElementById('g-film').getBoundingClientRect();
     const va = 1280 / 726;
@@ -71,15 +73,16 @@ async function assertFilmClear(page) {
   for (let i = 0; i < 3; i++) {
     if (Math.abs(covered[i] - field[i]) > 40) throw new Error('film halo ' + covered.join(',') + ' vs starfield ' + field.join(','));
   }
+  const loops = await page.evaluate(() => document.querySelector('#g-film video').loop);
+  if (!loops) throw new Error('the plate does not loop');
   await page.evaluate(() => {
     const v = document.querySelector('#g-film video');
-    v.currentTime = Math.max(0, v.duration - 0.3);
+    v.currentTime = Math.max(0, v.duration - 0.08);
   });
   await page.waitForFunction(() => {
-    const film = document.getElementById('g-film');
-    const vids = [...film.querySelectorAll('video')];
-    return film.dataset.handoff === '1' && vids.some((v) => !v.paused && v.currentTime < 2);
-  }, null, { timeout: 8000 });
+    const v = document.querySelector('#g-film video');
+    return v.currentTime < 0.45;
+  }, null, { timeout: 4000 });
 }
 
 async function assertLogo(page) {
@@ -224,6 +227,14 @@ async function voyage(page, name) {
   if (!/Next: planets/.test(next)) throw new Error('next chapter ' + next);
   if (many === '2' && !/Holman/.test(next)) throw new Error('binary note ' + next);
   if (many === '2') {
+    await page.waitForFunction(() => {
+      const plates = window.__pose && window.__pose.plates;
+      if (!plates || plates.length !== 2) return false;
+      const shown = [...document.querySelectorAll('[data-plate]')].filter((el) => !el.hidden);
+      if (shown.length < 2) return false;
+      const srcs = shown.map((el) => (el.querySelector('video') && el.querySelector('video').currentSrc) || '');
+      return srcs.some((s) => s.includes('g-star')) && srcs.some((s) => s.includes('k-star'));
+    }, null, { timeout: 15000 });
     await page.waitForSelector('#paths:not([hidden])');
     if (await page.evaluate(() => window.__paths) !== true) throw new Error('orbits did not start on');
     await click('#paths');

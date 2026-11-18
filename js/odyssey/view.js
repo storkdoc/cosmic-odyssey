@@ -568,10 +568,14 @@ export function createView(canvas) {
   }
 
   function plateBox(star, wx, wz) {
+    /* The new plates fill about 87% of the frame with the star disk. The frame
+       is sized so that disk, not the transparent margin, matches the diameter. */
+    const DISK = 0.87;
     const scale = plateScale(star);
     const center = project(wx, 0, wz);
-    const edge = project(wx + scale * 0.85, 0, wz);
-    const radius = Math.max(48, Math.hypot(edge.x - center.x, edge.y - center.y));
+    const edge = project(wx + scale, 0, wz);
+    const diskPx = Math.max(12, Math.hypot(edge.x - center.x, edge.y - center.y));
+    const radius = diskPx / DISK;
     const size = radius * 2;
     return {
       x: center.x - radius,

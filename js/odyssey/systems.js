@@ -200,12 +200,14 @@ export function pathCenters(layout, innerTurns) {
   ];
 }
 
-/* Screen size follows diameter, with a floor so a remnant is still a point of light
-   and a ceiling so a giant does not cover the orbits. */
+/* World radius of the visible star disk, in the same units as the orbits.
+   The square root keeps a giant on the map. The floor is low, so a white
+   dwarf or a neutron star stays a speck beside it, and the screen still
+   draws that speck at a few pixels. */
 export function plateScale(star) {
   const diameter = Math.max(1e-8, star.diameter || (star.radius || 1) * 2);
   const suns = diameter / 2;
-  return Math.max(0.28, Math.min(5.5, Math.sqrt(suns)));
+  return Math.max(0.07, Math.min(4.2, Math.sqrt(Math.max(suns, 1e-8))));
 }
 
 /* Placeholder worlds on the rings. They use the habitable zone and, for more than
