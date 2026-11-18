@@ -1,0 +1,36 @@
+{
+  "typeName": "Tidally locked eyeball world",
+  "radiusEarth": [
+    0.8,
+    1.5
+  ],
+  "massEarth": [
+    0.5,
+    3
+  ],
+  "orbitZone": "temperate (M-dwarf habitable zone)",
+  "equilibriumTempK": [
+    200,
+    280
+  ],
+  "atmosphereTint": "#9cc4ff",
+  "rotationPeriodHint": "locked: rotation period = orbital period",
+  "tidallyLocked": true,
+  "emissive": false,
+  "substellarDirection": "+x (right edge of the plate, on the equator)",
+  "atmosphere": "N2/CO2/H2O",
+  "albedoBond": 0.35,
+  "note": "Do NOT spin. Rotate the whole plate so +x points at the host star. From above the pole the open-ocean \"eye\" sits at the right limb; clouds still churn.",
+  "id": "eyeball",
+  "pack": "eyeball-pack.mp4",
+  "poster": "eyeball-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 954474
+}

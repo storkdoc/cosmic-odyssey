@@ -1,0 +1,35 @@
+{
+  "typeName": "Lava world (magma-ocean super-Earth)",
+  "radiusEarth": [
+    1.0,
+    2.0
+  ],
+  "massEarth": [
+    1,
+    8
+  ],
+  "orbitZone": "hot",
+  "equilibriumTempK": [
+    1500,
+    2800
+  ],
+  "atmosphereTint": "#ff8a3d",
+  "rotationPeriodHint": "often tidally locked in <1 day orbits; spun here for display",
+  "tidallyLocked": false,
+  "emissive": true,
+  "atmosphere": "rock vapour (Na, SiO)",
+  "albedoBond": 0.1,
+  "note": "Magma glow is baked emission: in the game keep orange/yellow pixels bright on the night side (add, do not darken fully). Set tidallyLocked if desired; the plate also works static.",
+  "id": "lava",
+  "pack": "lava-pack.mp4",
+  "poster": "lava-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 28,
+  "packBytes": 2466736
+}

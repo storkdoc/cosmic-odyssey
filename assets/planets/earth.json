@@ -1,0 +1,35 @@
+{
+  "typeName": "Temperate ocean world (Earth-like)",
+  "radiusEarth": [
+    0.8,
+    1.3
+  ],
+  "massEarth": [
+    0.5,
+    2.0
+  ],
+  "orbitZone": "temperate",
+  "equilibriumTempK": [
+    230,
+    300
+  ],
+  "atmosphereTint": "#7fb2ff",
+  "rotationPeriodHint": "~24 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "N2/O2, water clouds",
+  "albedoBond": 0.3,
+  "note": "Arctic sea ice at disk center; cyclones spiral counterclockwise (northern hemisphere).",
+  "id": "earth",
+  "pack": "earth-pack.mp4",
+  "poster": "earth-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 26,
+  "packBytes": 2715161
+}

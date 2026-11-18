@@ -1,0 +1,35 @@
+{
+  "typeName": "Frozen snowball world",
+  "radiusEarth": [
+    0.6,
+    1.6
+  ],
+  "massEarth": [
+    0.3,
+    4
+  ],
+  "orbitZone": "cold",
+  "equilibriumTempK": [
+    150,
+    230
+  ],
+  "atmosphereTint": "#bfe0ff",
+  "rotationPeriodHint": "~15-30 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "thin N2/CO2",
+  "albedoBond": 0.65,
+  "note": "Global ice shell with blue glacial ice and brownish fracture lineae (Europa/snowball-Earth style).",
+  "id": "snowball",
+  "pack": "snowball-pack.mp4",
+  "poster": "snowball-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 2180958
+}

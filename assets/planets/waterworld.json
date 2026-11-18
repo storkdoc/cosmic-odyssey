@@ -1,0 +1,35 @@
+{
+  "typeName": "Global ocean waterworld",
+  "radiusEarth": [
+    1.0,
+    2.0
+  ],
+  "massEarth": [
+    1.0,
+    8.0
+  ],
+  "orbitZone": "temperate",
+  "equilibriumTempK": [
+    250,
+    320
+  ],
+  "atmosphereTint": "#86b8ff",
+  "rotationPeriodHint": "~10-30 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "N2/H2O, heavy cloud",
+  "albedoBond": 0.32,
+  "note": "No continents; deep global ocean with plankton-like blooms, Arctic sea ice at center.",
+  "id": "waterworld",
+  "pack": "waterworld-pack.mp4",
+  "poster": "waterworld-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 26,
+  "packBytes": 2835777
+}

@@ -1,0 +1,35 @@
+{
+  "typeName": "Gas giant (Jupiter-like, polar view)",
+  "radiusEarth": [
+    9,
+    13
+  ],
+  "massEarth": [
+    100,
+    400
+  ],
+  "orbitZone": "cold",
+  "equilibriumTempK": [
+    100,
+    170
+  ],
+  "atmosphereTint": "#e9d9b8",
+  "rotationPeriodHint": "~10 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "H2/He, NH3 clouds",
+  "albedoBond": 0.34,
+  "note": "Juno-style polar cyclone octagon at center, chaotic cyclone field, belts/zones as concentric rings toward the limb. Equatorial belts and the 24N jet turn 2x (exaggerated) for visible differential rotation.",
+  "id": "jupiter",
+  "pack": "jupiter-pack.mp4",
+  "poster": "jupiter-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 2748189
+}
