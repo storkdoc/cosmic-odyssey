@@ -1,7 +1,8 @@
 /* Desktop and iPhone. Opens the starfield, picks a star, tunes it, and zooms.
    Also checks the SavagePlanets wordmark and mark are not stretched. */
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { extname, join, normalize } from 'node:path';
 import { chromium, devices } from 'playwright-core';
 
@@ -26,6 +27,59 @@ function serve() {
     });
     server.listen(0, '127.0.0.1', () => resolve(server));
   });
+}
+
+async function sample(page, x, y) {
+  const png = await page.screenshot({ type: 'png' });
+  await writeFile('/tmp/odyssey-shot.png', png);
+  const text = execFileSync('python3', ['-c', `from PIL import Image\nim=Image.open('/tmp/odyssey-shot.png')\np=im.getpixel((${x},${y}))\nprint(p[0], p[1], p[2])`]).toString().trim().split(/\s+/).map(Number);
+  return text;
+}
+
+async function assertFilmClear(page) {
+  await page.waitForFunction(() => document.getElementById('g-film') && document.getElementById('g-film').dataset.ready === '1', null, { timeout: 15000 });
+  const t0 = await page.evaluate(() => document.querySelector('#g-film video').currentTime);
+  await page.waitForTimeout(350);
+  const t1 = await page.evaluate(() => document.querySelector('#g-film video').currentTime);
+  if (!(t1 > t0)) throw new Error('G-star film is not playing');
+  const src = await page.evaluate(() => document.querySelector('#g-film video').currentSrc);
+  if (!/g-star/.test(src)) throw new Error('film source ' + src);
+  const spot = await page.evaluate(() => {
+    const film = document.getElementById('g-film').getBoundingClientRect();
+    const va = 1280 / 726;
+    const ca = film.width / Math.max(1, film.height);
+    let vw, vh, vx, vy;
+    if (ca > va) { vh = film.height; vw = vh * va; vx = film.left + (film.width - vw) / 2; vy = film.top; }
+    else { vw = film.width; vh = vw / va; vx = film.left; vy = film.top + (film.height - vh) / 2; }
+    return { x: vx + vw * 0.03, y: vy + vh * 0.12, dpr: window.devicePixelRatio };
+  });
+  const x = Math.round(spot.x * spot.dpr);
+  const y = Math.round(spot.y * spot.dpr);
+  const core = await page.evaluate(() => {
+    const film = document.getElementById('g-film').getBoundingClientRect();
+    return { x: film.left + film.width / 2, y: film.top + film.height / 2, dpr: window.devicePixelRatio };
+  });
+  const sun = await sample(page, Math.round(core.x * core.dpr), Math.round(core.y * core.dpr));
+  if (sun[0] < 120 || sun[1] < 40) throw new Error('G-star film is not showing the sun ' + sun.join(','));
+  const covered = await sample(page, x, y);
+  await page.evaluate(() => { document.getElementById('g-film').style.visibility = 'hidden'; });
+  await page.waitForTimeout(80);
+  const field = await sample(page, x, y);
+  await page.evaluate(() => { document.getElementById('g-film').style.visibility = ''; });
+  const sum = covered[0] + covered[1] + covered[2];
+  if (sum < 18) throw new Error('outside the corona is black ' + covered.join(','));
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(covered[i] - field[i]) > 40) throw new Error('film halo ' + covered.join(',') + ' vs starfield ' + field.join(','));
+  }
+  await page.evaluate(() => {
+    const v = document.querySelector('#g-film video');
+    v.currentTime = Math.max(0, v.duration - 0.3);
+  });
+  await page.waitForFunction(() => {
+    const film = document.getElementById('g-film');
+    const vids = [...film.querySelectorAll('video')];
+    return film.dataset.handoff === '1' && vids.some((v) => !v.paused && v.currentTime < 2);
+  }, null, { timeout: 8000 });
 }
 
 async function assertLogo(page) {
@@ -134,6 +188,19 @@ async function voyage(page, name) {
   if (await page.locator('#type-badge').getAttribute('data-type') !== 'g') throw new Error('mass slider changed the type');
   const teff = parseFloat((await page.locator('#derived-t').innerText()).replace(/,/g, ''));
   if (!(teff >= 5300 && teff <= 6000)) throw new Error('G temperature left its type ' + teff);
+  await assertFilmClear(page);
+  const held = await page.evaluate(() => window.__pose.dist);
+  await page.waitForTimeout(450);
+  const held2 = await page.evaluate(() => window.__pose.dist);
+  if (Math.abs(held2 - held) > 0.2) throw new Error('the camera zoomed on its own ' + held + ' ' + held2);
+  const theta0 = await page.evaluate(() => window.__pose.theta);
+  const viewBox = await page.locator('#view').boundingBox();
+  await page.mouse.move(viewBox.x + viewBox.width * 0.72, viewBox.y + 160);
+  await page.mouse.down();
+  await page.mouse.move(viewBox.x + viewBox.width * 0.72 + 140, viewBox.y + 160, { steps: 12 });
+  await page.mouse.up();
+  const theta1 = await page.evaluate(() => window.__pose.theta);
+  if (Math.abs(theta1 - theta0) < 0.08) throw new Error('drag did not orbit ' + theta0 + ' ' + theta1);
   await page.waitForTimeout(400);
   const dist0 = parseFloat(await page.locator('#cam-dist').innerText());
   await click('#zoom-in');

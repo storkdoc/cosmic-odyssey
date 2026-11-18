@@ -41,7 +41,7 @@ const STAR_FRAG = `
     float fine = fbm(n * 18.0 + vec3(uTime * 0.16, 0.0, 4.0));
     float cells = smoothstep(0.28, 0.82, g);
     float warm = smoothstep(-0.05, 0.35, uColor.r - uColor.b);
-    vec3 lava = mix(vec3(0.42, 0.04, 0.01), vec3(1.0, 0.78, 0.22), cells);
+    vec3 lava = mix(vec3(0.55, 0.16, 0.02), vec3(1.0, 0.72, 0.12), cells);
     lava = mix(lava, vec3(1.0, 0.95, 0.75), smoothstep(0.62, 0.9, fine) * 0.55);
     vec3 cool = uColor * (0.35 + 1.15 * cells) * (0.85 + 0.3 * fine);
     vec3 col = mix(cool, lava, warm);
@@ -337,8 +337,11 @@ export function createView(canvas) {
     }
     const loops = new THREE.Group();
     const loopColor = new THREE.Color('#ffb15a');
-    loops.add(prominence(loopColor, 1.25, 1.15, 0.95));
-    loops.add(prominence(loopColor, 0.72, 3.4, 0.48));
+    // A fan of loops on the limb that faces the resting camera, like the plate.
+    loops.add(prominence(loopColor, 0.85, -1.12, 0.32));
+    loops.add(prominence(loopColor, 1.05, -1.05, 0.55));
+    loops.add(prominence(loopColor, 1.2, -1.0, 0.82));
+    loops.add(prominence(loopColor, 1.35, -1.08, 1.05));
     const ejecta = makePoints(roundPoints(coarse ? 28 : 48, 1.1, true), 2.4);
     ejecta.visible = false;
     group.add(star, shadow, corona, disk, lens, beams, loops, ejecta);
@@ -380,7 +383,8 @@ export function createView(canvas) {
     try { buildComposer(); } catch (err) { quality = 'low'; composer = null; }
   }
 
-  const cam = { theta: 0.5, phi: 1.05, dist: 7.2, target: 7.2, dragging: false, lastX: 0, lastY: 0, pointers: new Map() };
+  const REST = { theta: 0.5, phi: 1.05, dist: 4.2 };
+  const cam = { theta: REST.theta, phi: REST.phi, dist: REST.dist, target: REST.dist, dragging: false, lastX: 0, lastY: 0, pointers: new Map() };
   let showBody = false;
   let mode = 'sky';
   let sys = null;
@@ -429,7 +433,6 @@ export function createView(canvas) {
     camera.near = 0.02;
     camera.updateProjectionMatrix();
     pathLines.forEach((line) => { line.visible = false; });
-    if (!showBody) cam.target = 6.4;
     showBody = true;
     bodies.forEach((body, i) => {
       body.group.visible = i === 0;
@@ -490,6 +493,17 @@ export function createView(canvas) {
     pathsOn = !!on;
     window.__paths = pathsOn;
     if (mode === 'system') pathLines.forEach((line) => { line.visible = pathsOn; });
+  }
+
+  function pose() {
+    const spec = bodies[0].spec;
+    const g = mode === 'focus' && spec && spec.type === 'g';
+    const near = Math.abs(cam.theta - REST.theta) < 0.16
+      && Math.abs(cam.phi - REST.phi) < 0.12
+      && Math.abs(cam.target - REST.dist) < 0.6;
+    const reading = { theta: cam.theta, phi: cam.phi, dist: cam.dist, target: cam.target, film: !!(g && near) };
+    window.__pose = reading;
+    return reading;
   }
 
   function zoomBy(factor) {
@@ -570,8 +584,11 @@ export function createView(canvas) {
         if (pathLines[i]) pathLines[i].position.set(c.x, 0, c.z);
       });
     }
-    bodies.forEach((body) => {
-      if (!body.group.visible || !body.spec) return;
+    const filmOn = pose().film;
+    bodies.forEach((body, index) => {
+      if (!body.spec) return;
+      if (mode === 'focus' && index === 0) body.group.visible = showBody && !filmOn;
+      if (!body.group.visible && !(mode === 'focus' && index === 0)) return;
       const spec = body.spec;
       const type = starType(spec.type);
       const shown = showBody;
@@ -744,6 +761,7 @@ export function createView(canvas) {
     zoomBy,
     resize: applySize,
     distance: () => cam.dist,
+    pose,
     onFlare: (fn) => { onFlare.fn = fn; }
   };
 }

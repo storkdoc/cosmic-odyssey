@@ -26,6 +26,27 @@ button {
 button.primary { background: var(--orange); border-color: var(--orange); color: #140800; font-weight: 600; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+#g-film {
+  position: fixed;
+  z-index: 2;
+  left: 38vw;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  background: transparent;
+}
+#g-film[hidden] { display: none !important; }
+#g-film.pack video { opacity: 0 !important; width: 1px; height: 1px; }
+#g-film video, #g-film canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+  pointer-events: none;
+}
 .sp-word { color: #EEEDE7; font-weight: 600; }
 .sp-word > span { color: #E03A3A; }
 
@@ -141,4 +162,5 @@ a { color: #EEEDE7; }
   }
   .sheet { max-height: 48vh; border-right: 0; border-top: 1px solid var(--line); }
   #tools { right: max(3.6rem, env(safe-area-inset-right, 0px)); }
+  #g-film { left: 0; right: 0; top: 0; bottom: 48vh; }
 }
