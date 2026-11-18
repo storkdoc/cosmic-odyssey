@@ -375,7 +375,7 @@ export function createView(canvas) {
     if (narrow && mode === 'system') camera.setViewOffset(w, h, 0, Math.min(40, h * 0.05), w, h);
     else if (narrow) camera.setViewOffset(w, h, 0, h * 0.16, w, h);
     else camera.setViewOffset(w, h, -w * 0.17, 0, w, h);
-    if (mode === 'system') refit(snapFrame);
+    if (snapFrame) refit(true);
     snapFrame = false;
     camera.updateProjectionMatrix();
     if (composer) composer.setSize(w, h);
@@ -690,8 +690,7 @@ export function createView(canvas) {
       return sys.stars.slice(0, 1).map((star) => ({ star, x: 0, z: 0, r: plateScale(star) }));
     }
     const extent = mapExtent;
-    if (grav) grav.advanceTo(simTime * grav.yearsPerSecond);
-    const placed = grav ? grav.bodies.filter((b) => b.kind === 'star') : [{ x: 0, z: 0 }];
+    const placed = grav ? grav.sample(simTime * grav.yearsPerSecond).filter((b) => b.kind !== 'planet') : [{ x: 0, z: 0 }];
     const peri = sys.separation ? sys.separation * (1 - (sys.eccentricity || 0)) : 0;
     const floor = screenFloor();
     return sys.stars.map((star, i) => {
@@ -719,7 +718,7 @@ export function createView(canvas) {
       if (label) label.hidden = true;
       return;
     }
-    const placed = grav ? grav.bodies.filter((b) => b.kind === 'star') : [{ x: 0, z: 0 }];
+    const placed = grav ? grav.sample(simTime * grav.yearsPerSecond).filter((b) => b.kind !== 'planet') : [{ x: 0, z: 0 }];
     const anchor = hzAnchor(placed);
     hzMesh.position.set(anchor.x, 0, anchor.z);
     hzMesh.visible = pathsOn;
@@ -794,9 +793,17 @@ export function createView(canvas) {
   function pose() {
     const placedNow = placement();
     const plates = placedNow.map((item) => plateBox(item));
-    const world = placedNow.map((item) => ({
-      x: item.x, z: item.z, r: item.r, type: item.star.type || 'g'
-    }));
+    const world = placedNow.map((item, i) => {
+      const mesh = plateBank.slots[i] && plateBank.slots[i].mesh;
+      return {
+        x: item.x,
+        z: item.z,
+        meshX: mesh ? mesh.position.x : item.x,
+        meshZ: mesh ? mesh.position.z : item.z,
+        r: item.r,
+        type: item.star.type || 'g'
+      };
+    });
     camera.getWorldDirection(viewDir);
     const lean = Math.atan2(Math.hypot(viewDir.x, viewDir.z), Math.max(0, -viewDir.y));
     const reading = {
@@ -813,6 +820,7 @@ export function createView(canvas) {
       orbits: pathLines.length,
       hz: !!(hzMesh && hzMesh.visible && mode === 'system'),
       count: sys ? sys.count : 0,
+      sim: simTime,
       film: plates.length > 0,
       plate: plates[0] || null,
       plates,
@@ -949,7 +957,8 @@ export function createView(canvas) {
 
   let simTime = 0;
   function frame(dt) {
-    const time = clockTime(dt);
+    const step = Math.min(0.05, Math.max(0, Number(dt) || 0));
+    const time = clockTime(step);
     simTime = time;
     const drift = reduce ? 0.15 : 1;
     sky.rotation.y += dt * 0.006 * drift;
@@ -989,9 +998,9 @@ export function createView(canvas) {
       });
       let inner = { x: 0, z: 0 };
       if (grav && sys.count > 2) {
-        const stars = grav.bodies.filter((b) => b.kind === 'star');
-        const m1 = stars[0].mass;
-        const m2 = stars[1].mass;
+        const stars = drawn.filter((b) => b.star);
+        const m1 = stars[0].star.mass;
+        const m2 = stars[1].star.mass;
         inner = {
           x: (stars[0].x * m1 + stars[1].x * m2) / (m1 + m2),
           z: (stars[0].z * m1 + stars[1].z * m2) / (m1 + m2)

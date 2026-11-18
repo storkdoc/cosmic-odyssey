@@ -414,6 +414,110 @@ try {
     }
     await platePixels(page, 36);
   }
+  async function assertSmooth(page) {
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    await page.click('.count-card[data-count="2"]');
+    await page.click('.star-card[data-type="g"]');
+    await page.click('#confirm-star');
+    await page.waitForSelector('#studio:not([hidden]) .star-card');
+    await page.click('.star-card[data-type="k"]');
+    await page.click('#confirm-star');
+    await page.waitForFunction(() => window.__view && window.__pose && window.__pose.mode === 'system' && window.__pose.world && window.__pose.world.length === 2);
+    const stats = await page.evaluate(() => {
+      const view = window.__view;
+      const video = document.querySelector('#plate-bank video');
+      let seeks = 0;
+      let loads = 0;
+      if (video) {
+        video.addEventListener('seeking', () => { seeks += 1; });
+        video.addEventListener('loadstart', () => { loads += 1; });
+      }
+      const samples = [];
+      let dist = 0;
+      let target = 0;
+      let cameraMoved = false;
+      for (let i = 0; i < 600; i++) {
+        view.frame(1 / 60);
+        const pose = view.pose();
+        const star = pose.world[0];
+        if (i === 0) { dist = pose.dist; target = pose.target; }
+        if (Math.abs(pose.dist - dist) > 1e-4 || Math.abs(pose.target - target) > 1e-4) cameraMoved = true;
+        samples.push({
+          x: star.meshX, z: star.meshZ,
+          qx: star.x, qz: star.z,
+          sim: pose.sim
+        });
+      }
+      const before = samples[samples.length - 1];
+      view.frame(5);
+      const jumped = view.pose().world[0];
+      const hop = Math.hypot(jumped.meshX - before.x, jumped.meshZ - before.z);
+      const d2 = [];
+      const speeds = [];
+      let frozen = 0;
+      let maxFrozen = 0;
+      let quant = 0;
+      for (let i = 1; i < samples.length; i++) {
+        const step = Math.hypot(samples[i].x - samples[i - 1].x, samples[i].z - samples[i - 1].z);
+        const ds = samples[i].sim - samples[i - 1].sim;
+        if (step < 1e-12) frozen += 1;
+        else { maxFrozen = Math.max(maxFrozen, frozen); frozen = 0; }
+        if (ds > 1e-8) speeds.push(step / ds);
+        if (Math.abs(samples[i].x - samples[i].qx) > 1e-5 || Math.abs(samples[i].z - samples[i].qz) > 1e-5) quant += 1;
+      }
+      maxFrozen = Math.max(maxFrozen, frozen);
+      for (let i = 1; i < samples.length - 1; i++) {
+        d2.push(Math.hypot(
+          samples[i + 1].x - 2 * samples[i].x + samples[i - 1].x,
+          samples[i + 1].z - 2 * samples[i].z + samples[i - 1].z
+        ));
+      }
+      const ordered = d2.slice().sort((a, b) => a - b);
+      const med = ordered[Math.floor(ordered.length / 2)] || 0;
+      const max = ordered[ordered.length - 1] || 0;
+      const speedOrder = speeds.slice().sort((a, b) => a - b);
+      const speedMed = speedOrder[Math.floor(speedOrder.length / 2)] || 0;
+      const speedMax = speedOrder[speedOrder.length - 1] || 0;
+      const frameStep = speedMed / 60;
+      return {
+        n: samples.length,
+        med,
+        max,
+        ratio: med > 0 ? max / med : Infinity,
+        speedRatio: speedMed > 0 ? speedMax / speedMed : Infinity,
+        maxFrozen,
+        moved: Math.hypot(samples[samples.length - 1].x - samples[0].x, samples[samples.length - 1].z - samples[0].z),
+        quant,
+        cameraMoved,
+        seeks,
+        loads,
+        hop,
+        frameStep
+      };
+    });
+    if (stats.n < 600) throw new Error('short sample ' + stats.n);
+    if (!(stats.moved > 0)) throw new Error('the star did not move');
+    if (stats.maxFrozen > 2) throw new Error('the orbit stalled ' + stats.maxFrozen);
+    if (!(stats.ratio < 3)) throw new Error('the orbit spiked ' + stats.ratio.toFixed(2));
+    if (!(stats.speedRatio < 1.6)) throw new Error('the orbit speed jumped ' + stats.speedRatio.toFixed(2));
+    if (stats.quant) throw new Error('the plate left its orbit position');
+    if (stats.cameraMoved) throw new Error('the camera chased the stars');
+    if (stats.seeks || stats.loads) throw new Error('the plate video restarted');
+    if (!(stats.hop < stats.frameStep * 4)) throw new Error('a long frame jumped the orbit ' + stats.hop);
+  }
+  {
+    const context = await browser.newContext({ viewport: { width: 1100, height: 700 }, deviceScaleFactor: 1 });
+    const page = await context.newPage();
+    page.on('pageerror', (err) => console.log('smooth', String(err).split('\n')[0]));
+    try {
+      await assertSmooth(page);
+      console.log('smooth-chrome', 'PASS');
+    } catch (err) {
+      failed++;
+      console.log('smooth-chrome', 'FAIL', err.message.split('\n')[0]);
+    }
+    await context.close();
+  }
   for (const count of [1, 3]) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
     const page = await context.newPage();

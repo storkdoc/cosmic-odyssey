@@ -14,6 +14,7 @@ const credits = document.getElementById('credits');
 const pathsBtn = document.getElementById('paths');
 
 const view = createView(document.getElementById('view'));
+window.__view = view;
 const audio = createAudio();
 audio.setVolume(1);
 

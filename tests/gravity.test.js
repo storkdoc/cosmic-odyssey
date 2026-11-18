@@ -121,6 +121,37 @@ check(twE < 5e-3, 'a triple keeps its energy over 1000 inner orbits ' + twE);
 check(twL < 1e-4, 'a triple keeps its angular momentum ' + twL);
 check(twC < 1e-8, 'a triple keeps its barycenter ' + twC);
 
+const smooth = [];
+for (let i = 0; i < 600; i++) {
+  const body = grav.sample((i / 60) * grav.yearsPerSecond)[0];
+  smooth.push(body);
+}
+check(grav.period / grav.dt >= 2000, 'the integrator takes at least 2000 steps per orbit ' + (grav.period / grav.dt));
+let smoothFrozen = 0;
+let smoothMaxFrozen = 0;
+const smoothStep = [];
+const smoothD2 = [];
+for (let i = 1; i < smooth.length; i++) {
+  const step = Math.hypot(smooth[i].x - smooth[i - 1].x, smooth[i].z - smooth[i - 1].z);
+  smoothStep.push(step);
+  if (step < 1e-12) smoothFrozen += 1;
+  else { smoothMaxFrozen = Math.max(smoothMaxFrozen, smoothFrozen); smoothFrozen = 0; }
+}
+smoothMaxFrozen = Math.max(smoothMaxFrozen, smoothFrozen);
+for (let i = 1; i < smooth.length - 1; i++) {
+  smoothD2.push(Math.hypot(
+    smooth[i + 1].x - 2 * smooth[i].x + smooth[i - 1].x,
+    smooth[i + 1].z - 2 * smooth[i].z + smooth[i - 1].z
+  ));
+}
+const d2Order = smoothD2.slice().sort((a, b) => a - b);
+const d2Med = d2Order[Math.floor(d2Order.length / 2)];
+const d2Max = d2Order[d2Order.length - 1];
+check(smoothMaxFrozen === 0, 'an analytic binary never stalls between frames');
+check(d2Med > 0 && d2Max / d2Med < 3, 'rendered steps stay smooth ' + (d2Max / d2Med));
+const cmRender = barycenter(grav.sample(grav.period * 0.37));
+check(Math.hypot(cmRender.x, cmRender.z) < 1e-9, 'rendered positions stay on the barycenter ' + Math.hypot(cmRender.x, cmRender.z));
+
 const rate = grav.rateText;
 check(/^1 s = /.test(rate) && !rate.includes('$'), 'the clock reads as a uniform rate ' + rate);
 const screenSeconds = binary.periodYears / grav.yearsPerSecond;
