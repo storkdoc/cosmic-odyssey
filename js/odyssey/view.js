@@ -1,6 +1,7 @@
 /* A NASA sky, up to three living stars, and a camera that can see one surface or the whole system. */
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { pathCenters, planetParent, plateScale, plateRadius, systemExtent, layoutScale, drawnGap, drawnStars, ORBIT_SECONDS } from './systems.js';
+import { planetParent, plateScale, plateRadius, systemExtent, ORBIT_SECONDS } from './systems.js';
+import { createGravity } from './gravity.js';
 import { createPlateBank } from './plates.js';
 import { EffectComposer } from '../../vendor/three/postprocessing/EffectComposer.js';
 import { RenderPass } from '../../vendor/three/postprocessing/RenderPass.js';
@@ -465,27 +466,33 @@ export function createView(canvas) {
     pathLines = [];
   }
 
-  function makeCircle(radius) {
+  function makeEllipse(radius, eccentricity, flip) {
     const group = new THREE.Group();
     const pts = [];
-    const steps = 160;
+    const steps = 180;
+    const e = Math.min(0.9, Math.max(0, eccentricity || 0));
+    const sign = flip ? -1 : 1;
     for (let i = 0; i <= steps; i++) {
-      const a = (i / steps) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
+      const nu = (i / steps) * Math.PI * 2;
+      const r = radius * (1 - e * e) / (1 + e * Math.cos(nu));
+      pts.push(new THREE.Vector3(sign * Math.cos(nu) * r, 0, sign * Math.sin(nu) * r));
     }
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({
       color: 0xf0e2cc, transparent: true, opacity: 0.85
     }));
-    const thickness = Math.max(0.004, radius * 0.004);
-    const glow = new THREE.Mesh(
-      new THREE.RingGeometry(Math.max(0.002, radius - thickness), radius + thickness, coarse ? 96 : 160),
-      new THREE.MeshBasicMaterial({
-        color: 0xf7ead8, side: THREE.DoubleSide, transparent: true, opacity: 0.45,
-        blending: THREE.AdditiveBlending, depthWrite: false
-      })
-    );
-    glow.rotation.x = -Math.PI / 2;
-    group.add(line, glow);
+    group.add(line);
+    if (e < 0.02) {
+      const thickness = Math.max(0.004, radius * 0.004);
+      const glow = new THREE.Mesh(
+        new THREE.RingGeometry(Math.max(0.002, radius - thickness), radius + thickness, coarse ? 96 : 160),
+        new THREE.MeshBasicMaterial({
+          color: 0xf7ead8, side: THREE.DoubleSide, transparent: true, opacity: 0.45,
+          blending: THREE.AdditiveBlending, depthWrite: false
+        })
+      );
+      glow.rotation.x = -Math.PI / 2;
+      group.add(glow);
+    }
     group.visible = pathsOn;
     pathRoot.add(group);
     pathLines.push(group);
@@ -533,8 +540,15 @@ export function createView(canvas) {
       else body.spec = null;
     });
     layout.planets = [];
+    grav = layout.count > 0 ? createGravity(layout, { secondsPerOrbit: orbitSeconds }) : null;
     mapExtent = systemExtent(layout);
-    (layout.paths || []).forEach((p) => makeCircle(p.radius));
+    (layout.paths || []).forEach((p) => makeEllipse(p.radius, p.e, p.flip));
+    const rate = document.getElementById('time-rate');
+    if (rate) {
+      rate.hidden = !grav;
+      if (grav) rate.textContent = grav.rateText;
+    }
+    window.__timeRate = grav ? grav.rateText : '';
     buildHabitable(layout);
     window.__planets = 0;
     camera.near = 0.01;
@@ -658,6 +672,7 @@ export function createView(canvas) {
 
   const plateBank = createPlateBank(scene);
   plateBank.prime();
+  let grav = null;
   const orbitSeconds = reduce ? 180 : ORBIT_SECONDS;
   window.__orbitSeconds = orbitSeconds;
   function turnsNow() {
@@ -675,13 +690,14 @@ export function createView(canvas) {
       return sys.stars.slice(0, 1).map((star) => ({ star, x: 0, z: 0, r: plateScale(star) }));
     }
     const extent = mapExtent;
-    const placed = sys.count > 1 ? drawnStars(sys, turnsNow(), extent) : [{ x: 0, z: 0 }];
-    const gap = sys.count > 1 ? drawnGap(sys, extent) : 0;
+    if (grav) grav.advanceTo(simTime * grav.yearsPerSecond);
+    const placed = grav ? grav.bodies.filter((b) => b.kind === 'star') : [{ x: 0, z: 0 }];
+    const peri = sys.separation ? sys.separation * (1 - (sys.eccentricity || 0)) : 0;
     const floor = screenFloor();
     return sys.stars.map((star, i) => {
       const at = placed[i] || { x: 0, z: 0 };
-      const cap = gap > 0 ? gap * 0.3 : extent * 0.28;
-      const r = Math.min(cap, Math.max(plateRadius(star, extent, gap), Math.min(floor, cap)));
+      const cap = peri > 0 ? peri * 0.35 : extent * 0.28;
+      const r = Math.min(cap, Math.max(plateRadius(star, extent, peri), Math.min(floor, cap)));
       return { star, x: at.x, z: at.z, r };
     });
   }
@@ -703,7 +719,7 @@ export function createView(canvas) {
       if (label) label.hidden = true;
       return;
     }
-    const placed = sys.count > 1 ? drawnStars(sys, turnsNow(), mapExtent) : [{ x: 0, z: 0 }];
+    const placed = grav ? grav.bodies.filter((b) => b.kind === 'star') : [{ x: 0, z: 0 }];
     const anchor = hzAnchor(placed);
     hzMesh.position.set(anchor.x, 0, anchor.z);
     hzMesh.visible = pathsOn;
@@ -750,7 +766,11 @@ export function createView(canvas) {
   function plateBox(item) {
     const center = project(item.x, item.z);
     const edge = project(item.x + item.r, item.z);
-    const corner = project(item.x + item.r, item.z - item.r);
+    const corners = [[item.r, -item.r], [-item.r, -item.r], [item.r, item.r], [-item.r, item.r]].map(([dx, dz]) => {
+      const p = project(item.x + dx, item.z + dz);
+      return { x: p.x, y: p.y, wx: item.x + dx, wz: item.z + dz };
+    });
+    const corner = corners[0];
     const radius = Math.max(1, Math.hypot(edge.x - center.x, edge.y - center.y));
     return {
       x: center.x - radius,
@@ -761,6 +781,7 @@ export function createView(canvas) {
       cy: center.y,
       cornerX: corner.x,
       cornerY: corner.y,
+      corners,
       worldX: item.x,
       worldZ: item.z,
       r: item.r,
@@ -959,7 +980,6 @@ export function createView(canvas) {
     const drawn = placement();
     plateBank.sync(drawn, hiddenPlates);
     if (mode === 'system' && sys && sys.count > 0) {
-      const scale = layoutScale(sys, mapExtent);
       drawn.forEach((p, i) => {
         const body = bodies[i];
         if (!body || !body.spec) return;
@@ -967,12 +987,20 @@ export function createView(canvas) {
         body.group.scale.setScalar(Math.max(1e-4, p.r));
         body.group.visible = showBody && !plateBank.slots[i].ready && !hiddenPlates;
       });
-      const centers = pathCenters(sys, turnsNow());
-      centers.forEach((c, i) => {
-        if (!pathLines[i]) return;
-        pathLines[i].position.set(c.x, 0, c.z);
-        const open = sys.count > 1 && (!sys.outerAU || i < 2) ? scale : 1;
-        pathLines[i].scale.set(open, 1, open);
+      let inner = { x: 0, z: 0 };
+      if (grav && sys.count > 2) {
+        const stars = grav.bodies.filter((b) => b.kind === 'star');
+        const m1 = stars[0].mass;
+        const m2 = stars[1].mass;
+        inner = {
+          x: (stars[0].x * m1 + stars[1].x * m2) / (m1 + m2),
+          z: (stars[0].z * m1 + stars[1].z * m2) / (m1 + m2)
+        };
+      }
+      pathLines.forEach((line, i) => {
+        const moving = sys.count > 2 && i < 2;
+        line.position.set(moving ? inner.x : 0, 0, moving ? inner.z : 0);
+        line.scale.set(1, 1, 1);
       });
     }
     movePlanets(time);

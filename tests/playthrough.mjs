@@ -42,11 +42,24 @@ async function platePixels(page, minCore = 80) {
     return window.__plateReady === '1' && v && v.currentTime > 0.15 && /pack\.mp4/.test(v.currentSrc || '');
   }, null, { timeout: 15000 });
   const spot = await page.evaluate(() => {
-    const plate = window.__pose.plates[0];
+    const plates = window.__pose.plates;
+    const plate = plates[0];
+    let corner = { x: plate.cornerX, y: plate.cornerY };
+    let best = -1;
+    (plate.corners || []).forEach((point) => {
+      let nearest = Infinity;
+      plates.slice(1).forEach((other) => {
+        nearest = Math.min(nearest, Math.hypot(point.wx - other.worldX, point.wz - other.worldZ) / Math.max(other.r, 1e-6));
+      });
+      if (nearest > best) {
+        best = nearest;
+        corner = point;
+      }
+    });
     return {
       dpr: window.devicePixelRatio,
       core: { x: plate.cx, y: plate.cy },
-      corner: { x: plate.cornerX, y: plate.cornerY },
+      corner,
       src: document.querySelector('#plate-bank video').currentSrc
     };
   });
@@ -250,6 +263,8 @@ async function voyage(page, name) {
     if (framed.plates && framed.plates[0] && framed.plates[0].w < 48) throw new Error('star plate is a speck ' + framed.plates[0].w);
     const pace = await page.evaluate(() => window.__orbitSeconds);
     if (!(pace >= 60 && pace <= 90)) throw new Error('orbits are not calm ' + pace);
+    const rate = await page.locator('#time-rate').innerText();
+    if (!/^1 s = /.test(rate)) throw new Error('time rate missing ' + rate);
     if (await page.evaluate(() => window.__planets) !== 0) throw new Error('placeholder planets are still drawn');
     if (!(framed.dist > framed.extent * 0.8 && Math.abs(framed.dist - framed.fit) / framed.fit < 0.25)) {
       throw new Error('the map is not framed ' + framed.dist + ' fit ' + framed.fit + ' extent ' + framed.extent);

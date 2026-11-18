@@ -1,5 +1,5 @@
 import { derive, defaultsFor } from '../js/odyssey/stars.js';
-import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale, plateRadius, systemExtent, drawnStars, drawnGap, ORBIT_SECONDS } from '../js/odyssey/systems.js';
+import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale, plateRadius, systemExtent, drawnStars, ORBIT_SECONDS } from '../js/odyssey/systems.js';
 
 let fails = 0;
 const check = (ok, msg) => { if (!ok) fails++; console.log(ok ? '  PASS' : '  FAIL', msg); };
@@ -15,14 +15,19 @@ function dist(a, b) {
 const binary = designSystem([star('g'), star('k')]);
 check(binary.stable && binary.architecture === 'binary', 'a designed binary is stable');
 check(binary.separation > (binary.stars[0].trueAU + binary.stars[1].trueAU) * 2, 'the stars do not touch');
-const hw = holmanWiegert(binary.separation, binary.stars[0].mass, binary.stars[1].mass, 0);
+const hw = holmanWiegert(binary.separation, binary.stars[0].mass, binary.stars[1].mass, binary.eccentricity);
 check(Math.abs(hw.sType - binary.holman.sType) < 1e-9, 'Holman S-type limit is stored');
 check(hw.pType > binary.separation && hw.sType < binary.separation, 'S-type is inside the binary and P-type is outside');
+const peri = binary.separation * (1 - binary.eccentricity);
 const b0 = positionsAt(binary, 0);
 const b1 = positionsAt(binary, 0.25);
-check(Math.abs(dist(b0[0], b0[1]) - binary.separation) < 1e-6, 'binary separation at the start');
-check(Math.abs(dist(b1[0], b1[1]) - binary.separation) < 1e-6, 'binary separation a quarter turn later');
-check(dist(b0[0], b1[0]) > binary.separation * 0.2, 'the primary actually moves along the orbit');
+check(Math.abs(dist(b0[0], b0[1]) - peri) < 1e-6, 'the binary starts at periapsis ' + dist(b0[0], b0[1]));
+check(Math.abs(dist(b1[0], b1[1]) - peri) > binary.separation * 0.05, 'a quarter orbit later the stars have separated');
+check(dist(b0[0], b1[0]) > peri * 0.2, 'the primary actually moves along the orbit');
+const heavierFirst = binary.stars[0].mass >= binary.stars[1].mass;
+const dPrimary = Math.hypot(b0[0].x, b0[0].z);
+const dSecondary = Math.hypot(b0[1].x, b0[1].z);
+check(heavierFirst ? dPrimary < dSecondary : dSecondary < dPrimary, 'the heavier star stays closer to the barycenter');
 check(/Holman/.test(binary.note), 'the binary note names the limit');
 
 const triple = designSystem([star('g'), star('k'), star('m')]);
@@ -31,8 +36,10 @@ check(triple.ratio > triple.crit, 'outer orbit clears Mardling and Aarseth ' + t
 check(triple.periodRatio > 5, 'outer period is more than five times the inner ' + triple.periodRatio);
 const t0 = positionsAt(triple, 0);
 const t1 = positionsAt(triple, 0.37);
-check(Math.abs(dist(t0[0], t0[1]) - triple.separation) < 1e-6, 'inner pair stays at its separation');
-check(Math.abs(dist(t1[0], t1[1]) - triple.separation) < 1e-6, 'inner pair stays bound a moment later');
+const innerPeri = triple.separation * (1 - triple.eccentricity);
+check(Math.abs(dist(t0[0], t0[1]) - innerPeri) < 1e-5, 'the inner pair starts at periapsis');
+const later = dist(t1[0], t1[1]);
+check(later > innerPeri && later < triple.separation * (1 + triple.eccentricity) * 1.02, 'the inner pair stays on its ellipse ' + later);
 const bary = {
   x: (t0[0].x * triple.stars[0].mass + t0[1].x * triple.stars[1].mass) / (triple.stars[0].mass + triple.stars[1].mass),
   z: (t0[0].z * triple.stars[0].mass + t0[1].z * triple.stars[1].mass) / (triple.stars[0].mass + triple.stars[1].mass)
@@ -74,17 +81,15 @@ check(giantOnMap > sunPlate && giantOnMap <= ext * 0.28 + 1e-9, 'a giant is larg
 check(systemExtent(none) > 0, 'a rogue map still has a frame');
 
 const binExtent = systemExtent(Object.assign({}, binary, { planets: binaryPlanets }));
-const opened = drawnGap(binary, binExtent);
-const gDisk = plateRadius(binary.stars[0], binExtent, opened);
-const kDisk = plateRadius(binary.stars[1], binExtent, opened);
-check(opened >= binary.separation && opened > binExtent * 0.2, 'a tight binary is opened on the map ' + opened);
-check(gDisk + kDisk < opened * 0.999, 'binary disks stay apart ' + gDisk + ' ' + kDisk + ' ' + opened);
+const gDisk = plateRadius(binary.stars[0], binExtent, peri);
+const kDisk = plateRadius(binary.stars[1], binExtent, peri);
+check(gDisk + kDisk < peri, 'binary disks stay inside the physical periapsis ' + gDisk + ' ' + kDisk + ' ' + peri);
 check(ORBIT_SECONDS >= 60 && ORBIT_SECONDS <= 90, 'a binary orbit takes about a minute and a quarter ' + ORBIT_SECONDS);
-const drawn = drawnStars(binary, 0.2, binExtent);
-check(Math.abs(Math.hypot(drawn[0].x - drawn[1].x, drawn[0].z - drawn[1].z) - opened) < 1e-6, 'drawn stars sit on the opened gap');
+const drawn = drawnStars(binary, 0);
+check(Math.abs(Math.hypot(drawn[0].x - drawn[1].x, drawn[0].z - drawn[1].z) - peri) < 1e-6, 'drawn stars use the physical periapsis');
 const triExtent = systemExtent(triple);
-const triDrawn = drawnStars(triple, 0.15, triExtent);
-const triGap = drawnGap(triple, triExtent);
+const triDrawn = drawnStars(triple, 0);
+const triGap = triple.separation * (1 - triple.eccentricity);
 for (let i = 0; i < 3; i++) {
   for (let j = i + 1; j < 3; j++) {
     const d = Math.hypot(triDrawn[i].x - triDrawn[j].x, triDrawn[i].z - triDrawn[j].z);

@@ -5,6 +5,7 @@
    is more than five times the inner period. Orbits are circular and coplanar.
    The motion the screen shows keeps those period ratios and runs faster than real time. */
 import { starType } from './stars.js';
+import { keplerPeriod, keplerStars, BINARY_ECCENTRICITY, TRIPLE_INNER_ECCENTRICITY } from './gravity.js';
 
 export const RSUN_AU = 0.00465047;
 
@@ -53,7 +54,7 @@ function detachedAU(a, b) {
 }
 
 function periodYears(aAU, massSolar) {
-  return Math.sqrt(Math.pow(aAU, 3) / Math.max(1e-8, massSolar));
+  return keplerPeriod(aAU, massSolar);
 }
 
 function formatPeriod(years) {
@@ -91,37 +92,42 @@ export function designSystem(stars) {
 
 function designBinary(a, b) {
   const separation = detachedAU(a, b);
-  const holman = holmanWiegert(separation, a.mass, b.mass, 0);
+  const eccentricity = BINARY_ECCENTRICITY;
+  const holman = holmanWiegert(separation, a.mass, b.mass, eccentricity);
   const period = periodYears(separation, a.mass + b.mass);
-  const r1 = separation * b.mass / (a.mass + b.mass);
-  const r2 = separation * a.mass / (a.mass + b.mass);
+  const M = a.mass + b.mass;
+  const r1 = separation * b.mass / M;
+  const r2 = separation * a.mass / M;
   const close = separation < 0.5;
   const enlarged = a.enlarged || b.enlarged ? ' Remnants are drawn larger than their true radii.' : '';
   return {
     count: 2,
     architecture: 'binary',
-    stable: separation > (a.trueAU + b.trueAU) * 1.5,
+    stable: separation * (1 - eccentricity) > (a.trueAU + b.trueAU) * 1.5,
     separation,
+    eccentricity,
     periodYears: period,
     holman,
     stars: [a, b],
-    paths: [{ radius: r1 }, { radius: r2 }],
-    span: separation * 1.6,
+    paths: [{ radius: r1, e: eccentricity, flip: true }, { radius: r2, e: eccentricity, flip: false }],
+    span: separation * (1 + eccentricity),
     note: (close ? 'A stable close binary. ' : 'A stable wide binary. ')
-      + 'The stars stay ' + separation.toFixed(2) + ' AU apart and orbit their common center every ' + formatPeriod(period) + '. '
+      + 'The stars follow ellipses about their common center of mass, semimajor axis ' + separation.toFixed(2) + ' AU, eccentricity ' + eccentricity.toFixed(2) + ', once every ' + formatPeriod(period) + '. '
+      + 'The heavier star stays closer to the center. Kepler’s third law sets that period from the masses. '
       + 'A planet around one star stays stable inside about ' + holman.sType.toFixed(2) + ' AU of that star. '
       + 'A planet around both stays stable beyond about ' + holman.pType.toFixed(2) + ' AU (Holman and Wiegert). '
-      + 'The motion keeps that orbit and runs faster than real time so you can watch it.' + enlarged
+      + 'One clock speeds the whole system up so you can watch it.' + enlarged
   };
 }
 
 function designTriple(a, b, c) {
   const aIn = detachedAU(a, b);
+  const eccentricity = TRIPLE_INNER_ECCENTRICITY;
   const q = c.mass / (a.mass + b.mass);
-  const crit = mardlingRatio(q, 0, 0);
+  const crit = mardlingRatio(q, eccentricity, 0);
   const drawGap = aIn + 6 * (c.drawAU + Math.max(a.drawAU, b.drawAU));
   const aOut = Math.max(aIn * crit * 2.4, drawGap);
-  const assessed = assessTriple({ aIn, aOut, m1: a.mass, m2: b.mass, m3: c.mass });
+  const assessed = assessTriple({ aIn, aOut, m1: a.mass, m2: b.mass, m3: c.mass, eIn: eccentricity, eOut: 0 });
   const M12 = a.mass + b.mass;
   const periodIn = periodYears(aIn, M12);
   const periodOut = periodYears(aOut, M12 + c.mass);
@@ -134,6 +140,8 @@ function designTriple(a, b, c) {
     architecture: 'hierarchical',
     stable: assessed.stable,
     separation: aIn,
+    eccentricity,
+    outerEccentricity: 0,
     outerAU: aOut,
     periodYears: periodIn,
     outerPeriodYears: periodOut,
@@ -141,7 +149,11 @@ function designTriple(a, b, c) {
     crit: assessed.crit,
     ratio: assessed.ratio,
     stars: [a, b, c],
-    paths: [{ radius: r1 }, { radius: r2 }, { radius: outerR }],
+    paths: [
+      { radius: r1, e: eccentricity, flip: true },
+      { radius: r2, e: eccentricity, flip: false },
+      { radius: outerR, e: 0, flip: false }
+    ],
     span: aOut * 1.35,
     note: 'A hierarchical triple. The inner pair is ' + aIn.toFixed(2) + ' AU apart, with a period of ' + formatPeriod(periodIn) + '. '
       + 'The third star orbits that pair at ' + aOut.toFixed(2) + ' AU, every ' + formatPeriod(periodOut) + '. '
@@ -155,34 +167,7 @@ export function positionsAt(layout, innerTurns) {
   const stars = layout.stars || [];
   if (!stars.length) return [];
   if (stars.length === 1) return [{ x: 0, z: 0, drawAU: stars[0].drawAU }];
-  const ang = innerTurns * Math.PI * 2;
-  if (stars.length === 2) {
-    const m1 = stars[0].mass, m2 = stars[1].mass;
-    const a = layout.separation;
-    const r1 = a * m2 / (m1 + m2);
-    const r2 = a * m1 / (m1 + m2);
-    return [
-      { x: Math.cos(ang) * r1, z: Math.sin(ang) * r1, drawAU: stars[0].drawAU },
-      { x: -Math.cos(ang) * r2, z: -Math.sin(ang) * r2, drawAU: stars[1].drawAU }
-    ];
-  }
-  const m1 = stars[0].mass, m2 = stars[1].mass, m3 = stars[2].mass;
-  const M12 = m1 + m2;
-  const M = M12 + m3;
-  const aIn = layout.separation;
-  const aOut = layout.outerAU;
-  const outerAng = ang / layout.periodRatio;
-  const bx = Math.cos(outerAng) * aOut * m3 / M;
-  const bz = Math.sin(outerAng) * aOut * m3 / M;
-  const r1 = aIn * m2 / M12;
-  const r2 = aIn * m1 / M12;
-  const ox = -Math.cos(outerAng) * aOut * M12 / M;
-  const oz = -Math.sin(outerAng) * aOut * M12 / M;
-  return [
-    { x: bx + Math.cos(ang) * r1, z: bz + Math.sin(ang) * r1, drawAU: stars[0].drawAU },
-    { x: bx - Math.cos(ang) * r2, z: bz - Math.sin(ang) * r2, drawAU: stars[1].drawAU },
-    { x: ox, z: oz, drawAU: stars[2].drawAU }
-  ];
+  return keplerStars(layout, (innerTurns || 0) * (layout.periodYears || 1));
 }
 
 export function pathCenters(layout, innerTurns) {
@@ -229,52 +214,38 @@ export function plateRadius(star, extent, gap) {
   return Math.max(floor, Math.min(cap, size));
 }
 
-/* How much to open a tight pair so each star is large on the map without crossing the outer star. */
-export function layoutScale(layout, extent) {
-  const gap = layout && layout.count > 1 && layout.separation > 0 ? layout.separation : 0;
-  if (!gap || !(extent > 0)) return 1;
-  const wanted = extent * 0.62;
-  let cap = 8;
-  if (layout.outerAU) cap = Math.min(cap, (0.42 * layout.outerAU) / gap);
-  return Math.max(1, Math.min(wanted / gap, cap));
-}
-
-export function drawnGap(layout, extent) {
-  const gap = layout && layout.separation > 0 ? layout.separation : 0;
-  return gap * layoutScale(layout, extent);
-}
-
-/* Star positions for the map. A tight inner pair is opened around its own barycenter.
-   The outer star of a triple stays on its true orbit. */
-export function drawnStars(layout, turns, extent) {
-  const raw = positionsAt(layout, turns);
-  const scale = layoutScale(layout, extent);
-  if (raw.length < 2 || scale === 1) return raw;
-  if (raw.length === 2) {
-    return raw.map((p) => ({ x: p.x * scale, z: p.z * scale, drawAU: p.drawAU }));
-  }
-  const m1 = layout.stars[0].mass || 1;
-  const m2 = layout.stars[1].mass || 1;
-  const bx = (raw[0].x * m1 + raw[1].x * m2) / (m1 + m2);
-  const bz = (raw[0].z * m1 + raw[1].z * m2) / (m1 + m2);
-  return [
-    { x: bx + (raw[0].x - bx) * scale, z: bz + (raw[0].z - bz) * scale, drawAU: raw[0].drawAU },
-    { x: bx + (raw[1].x - bx) * scale, z: bz + (raw[1].z - bz) * scale, drawAU: raw[1].drawAU },
-    raw[2]
-  ];
+/* On-screen positions are the physical Keplerian positions, in AU. */
+export function drawnStars(layout, turns) {
+  return positionsAt(layout, turns);
 }
 
 /* Radius that the default camera must contain: outermost world, stellar orbit, and habitable zone. */
 export function systemExtent(layout) {
   if (!layout || !layout.stars || !layout.stars.length) return 2;
-  let maxR = 0.5;
-  (layout.planets || []).forEach((planet) => { if (planet.a) maxR = Math.max(maxR, planet.a); });
-  (layout.paths || []).forEach((path) => { if (path.radius) maxR = Math.max(maxR, path.radius); });
-  if (layout.outerAU) maxR = Math.max(maxR, layout.outerAU);
-  if (layout.separation) maxR = Math.max(maxR, layout.separation * 0.5);
+  const e = layout.eccentricity || 0;
+  const eOut = layout.outerEccentricity || 0;
+  let stellar = 0.4;
+  if (layout.separation && layout.stars.length >= 2) {
+    const m1 = layout.stars[0].mass;
+    const m2 = layout.stars[1].mass;
+    const far = layout.separation * Math.max(m1, m2) / (m1 + m2) * (1 + e);
+    stellar = Math.max(stellar, far);
+  }
+  if (layout.outerAU && layout.stars.length >= 3) {
+    const m1 = layout.stars[0].mass;
+    const m2 = layout.stars[1].mass;
+    const m3 = layout.stars[2].mass;
+    const M12 = m1 + m2;
+    const far = layout.outerAU * M12 / (M12 + m3) * (1 + eOut) + (layout.separation || 0) * 0.5;
+    stellar = Math.max(stellar, far);
+  }
+  let maxR = stellar * 1.35;
+  (layout.planets || []).forEach((planet) => { if (planet.a) maxR = Math.max(maxR, planet.a * 1.05); });
   const hz = layout.stars[0] && layout.stars[0].hz;
-  if (hz && hz.outer > hz.inner) maxR = Math.max(maxR, hz.outer);
-  return maxR * 1.16;
+  if (hz && hz.outer > hz.inner && !layout.separation) {
+    maxR = Math.max(maxR, Math.min(hz.outer * 1.02, Math.max(stellar, 0.45) * 2.5));
+  }
+  return Math.max(0.35, maxR);
 }
 
 /* Placeholder worlds on the rings. They use the habitable zone and, for more than
