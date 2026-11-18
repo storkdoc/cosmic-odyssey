@@ -1,0 +1,35 @@
+{
+  "typeName": "Mini-Neptune (hazy sub-Neptune)",
+  "radiusEarth": [
+    1.8,
+    3.5
+  ],
+  "massEarth": [
+    4,
+    15
+  ],
+  "orbitZone": "temperate-cold",
+  "equilibriumTempK": [
+    250,
+    450
+  ],
+  "atmosphereTint": "#c8e6f0",
+  "rotationPeriodHint": "~10-20 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "H2/He envelope with photochemical haze",
+  "albedoBond": 0.3,
+  "note": "Muted, hazy, barely banded; the most common planet type in the Galaxy.",
+  "id": "minineptune",
+  "pack": "minineptune-pack.mp4",
+  "poster": "minineptune-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 873279
+}

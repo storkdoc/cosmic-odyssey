@@ -1,0 +1,35 @@
+{
+  "typeName": "Rusty desert world (Mars-like)",
+  "radiusEarth": [
+    0.4,
+    0.7
+  ],
+  "massEarth": [
+    0.08,
+    0.3
+  ],
+  "orbitZone": "temperate-cold",
+  "equilibriumTempK": [
+    190,
+    230
+  ],
+  "atmosphereTint": "#e8b48a",
+  "rotationPeriodHint": "~24.6 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "thin CO2, dust",
+  "albedoBond": 0.25,
+  "note": "North polar cap at disk center with spiral troughs and Chasma Boreale.",
+  "id": "mars",
+  "pack": "mars-pack.mp4",
+  "poster": "mars-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 1762841
+}

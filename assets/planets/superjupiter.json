@@ -1,0 +1,35 @@
+{
+  "typeName": "Brown-dwarf-like super-Jupiter",
+  "radiusEarth": [
+    10,
+    13
+  ],
+  "massEarth": [
+    3000,
+    25000
+  ],
+  "orbitZone": "any (self-luminous)",
+  "equilibriumTempK": [
+    800,
+    1500
+  ],
+  "atmosphereTint": "#ff5a2a",
+  "rotationPeriodHint": "~2-6 h (fast)",
+  "tidallyLocked": false,
+  "emissive": true,
+  "atmosphere": "H2/He with silicate & iron clouds (L/T transition)",
+  "albedoBond": 0.05,
+  "note": "Self-luminous: glow is baked, so light it mostly by its own emission (keep night side glowing). Patchy clouds flicker slowly; equatorial band turns 2x.",
+  "id": "superjupiter",
+  "pack": "superjupiter-pack.mp4",
+  "poster": "superjupiter-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 26,
+  "packBytes": 2671031
+}

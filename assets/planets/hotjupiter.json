@@ -1,0 +1,36 @@
+{
+  "typeName": "Hot Jupiter (tidally locked, very dark)",
+  "radiusEarth": [
+    11,
+    22
+  ],
+  "massEarth": [
+    50,
+    1500
+  ],
+  "orbitZone": "hot",
+  "equilibriumTempK": [
+    1000,
+    2500
+  ],
+  "atmosphereTint": "#ff6a3a",
+  "rotationPeriodHint": "locked: ~1-5 d orbit",
+  "tidallyLocked": true,
+  "emissive": true,
+  "substellarDirection": "+x (right edge, on the equator); thermal hotspot offset ~25 deg east (counterclockwise)",
+  "atmosphere": "H2/He with alkali metals; albedo < 0.05",
+  "albedoBond": 0.04,
+  "note": "Do NOT spin the plate; rotate so +x faces the star. Dayside thermal glow is baked (emissive, fixed); the equatorial superrotating jet band streams through the loop.",
+  "id": "hotjupiter",
+  "pack": "hotjupiter-pack.mp4",
+  "poster": "hotjupiter-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 969511
+}

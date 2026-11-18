@@ -1,0 +1,35 @@
+{
+  "typeName": "Desert dune world",
+  "radiusEarth": [
+    0.6,
+    1.5
+  ],
+  "massEarth": [
+    0.3,
+    3
+  ],
+  "orbitZone": "temperate-hot",
+  "equilibriumTempK": [
+    280,
+    380
+  ],
+  "atmosphereTint": "#f0c48a",
+  "rotationPeriodHint": "~20-30 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "thin N2/CO2, dust",
+  "albedoBond": 0.35,
+  "note": "Global sand seas of longitudinal dunes, dark rock massifs, salt pans, tiny polar cap, dust storm.",
+  "id": "dune",
+  "pack": "dune-pack.mp4",
+  "poster": "dune-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 30,
+  "packBytes": 2835483
+}

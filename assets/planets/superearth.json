@@ -1,0 +1,35 @@
+{
+  "typeName": "Super-Earth (large rocky world)",
+  "radiusEarth": [
+    1.3,
+    1.9
+  ],
+  "massEarth": [
+    2,
+    8
+  ],
+  "orbitZone": "temperate",
+  "equilibriumTempK": [
+    220,
+    320
+  ],
+  "atmosphereTint": "#a9c8ff",
+  "rotationPeriodHint": "~12-40 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "thicker N2/CO2/H2O",
+  "albedoBond": 0.3,
+  "note": "Drier, larger rocky world: ochre highlands, shallow turquoise seas, salt flats.",
+  "id": "superearth",
+  "pack": "superearth-pack.mp4",
+  "poster": "superearth-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 2979035
+}

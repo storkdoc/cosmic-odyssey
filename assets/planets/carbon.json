@@ -1,0 +1,35 @@
+{
+  "typeName": "Carbon world (graphite/carbide crust)",
+  "radiusEarth": [
+    0.8,
+    1.8
+  ],
+  "massEarth": [
+    0.5,
+    6
+  ],
+  "orbitZone": "hot-temperate",
+  "equilibriumTempK": [
+    400,
+    900
+  ],
+  "atmosphereTint": "#b5703a",
+  "rotationPeriodHint": "~20-40 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "CO/CH4 with hydrocarbon haze",
+  "albedoBond": 0.06,
+  "note": "Very dark graphite crust, tar plains, silvery carbide ridges, brown haze.",
+  "id": "carbon",
+  "pack": "carbon-pack.mp4",
+  "poster": "carbon-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 1444295
+}

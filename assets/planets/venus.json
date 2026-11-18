@@ -1,0 +1,35 @@
+{
+  "typeName": "Thick-cloud world (Venus-like)",
+  "radiusEarth": [
+    0.8,
+    1.2
+  ],
+  "massEarth": [
+    0.6,
+    1.2
+  ],
+  "orbitZone": "hot",
+  "equilibriumTempK": [
+    230,
+    330
+  ],
+  "atmosphereTint": "#f2d49a",
+  "rotationPeriodHint": "retrograde, ~243 d solid body; clouds super-rotate in ~4 d",
+  "tidallyLocked": false,
+  "emissive": false,
+  "spinSense": "clockwise (retrograde) seen from above the north pole",
+  "atmosphere": "CO2 with sulfuric-acid clouds",
+  "albedoBond": 0.76,
+  "note": "Only the cloud deck is visible. S-shaped polar vortex dipole inside a darker cold collar; inner vortex turns 2x faster.",
+  "id": "venus",
+  "pack": "venus-pack.mp4",
+  "poster": "venus-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "crf": 24,
+  "packBytes": 2122708
+}

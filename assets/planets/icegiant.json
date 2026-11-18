@@ -1,0 +1,37 @@
+{
+  "typeName": "Ice giant (Neptune-like)",
+  "radiusEarth": [
+    3.5,
+    4.5
+  ],
+  "massEarth": [
+    14,
+    20
+  ],
+  "orbitZone": "cold",
+  "equilibriumTempK": [
+    45,
+    80
+  ],
+  "atmosphereTint": "#5f8dff",
+  "rotationPeriodHint": "~16 h",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "H2/He/CH4",
+  "albedoBond": 0.29,
+  "rings": "icegiant-rings.png",
+  "ringsImageHalfWidthPlanetRadii": 2.7,
+  "note": "Concentric bands; dark anticyclonic spot (turns clockwise) with bright companion clouds; high latitudes turn 2x faster than the equator (Neptune has retrograde equatorial winds).",
+  "id": "icegiant",
+  "pack": "icegiant-pack.mp4",
+  "poster": "icegiant-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 26,
+  "packBytes": 2387465
+}

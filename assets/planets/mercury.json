@@ -1,0 +1,35 @@
+{
+  "typeName": "Cratered airless world (Mercury-like)",
+  "radiusEarth": [
+    0.3,
+    0.6
+  ],
+  "massEarth": [
+    0.03,
+    0.2
+  ],
+  "orbitZone": "hot",
+  "equilibriumTempK": [
+    400,
+    700
+  ],
+  "atmosphereTint": "#000000",
+  "rotationPeriodHint": "~59 days (3:2 spin-orbit); slow",
+  "tidallyLocked": false,
+  "emissive": false,
+  "atmosphere": "none (exosphere)",
+  "albedoBond": 0.09,
+  "note": "No atmosphere: use no rim glow.",
+  "id": "mercury",
+  "pack": "mercury-pack.mp4",
+  "poster": "mercury-poster.png",
+  "packLayout": "1024x2048 H.264: color albedo (unlit) on top half, alpha matte on bottom half",
+  "diskRadiusFrac": 0.96875,
+  "loopSeconds": 15.0,
+  "fps": 24,
+  "frames": 360,
+  "viewedFrom": "north pole, orthographic",
+  "spinSense": "counterclockwise (prograde) seen from above the north pole",
+  "crf": 24,
+  "packBytes": 1859066
+}
