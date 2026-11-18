@@ -1,5 +1,5 @@
 import { derive, defaultsFor } from '../js/odyssey/stars.js';
-import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale, plateRadius, systemExtent } from '../js/odyssey/systems.js';
+import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale, plateRadius, systemExtent, drawnStars, drawnGap } from '../js/odyssey/systems.js';
 
 let fails = 0;
 const check = (ok, msg) => { if (!ok) fails++; console.log(ok ? '  PASS' : '  FAIL', msg); };
@@ -72,6 +72,26 @@ check(sunPlate < ext * 0.2 && sunPlate > ext * 0.04, 'a sun is a fraction of the
 check(nsPlate >= ext * 0.02 && nsPlate < sunPlate * 0.5, 'a neutron star stays visible and smaller than the sun ' + nsPlate);
 check(giantOnMap > sunPlate && giantOnMap <= ext * 0.18 + 1e-9, 'a giant is larger and still inside the map ' + giantOnMap);
 check(systemExtent(none) > 0, 'a rogue map still has a frame');
+
+const binExtent = systemExtent(Object.assign({}, binary, { planets: binaryPlanets }));
+const opened = drawnGap(binary, binExtent);
+const gDisk = plateRadius(binary.stars[0], binExtent, opened);
+const kDisk = plateRadius(binary.stars[1], binExtent, opened);
+check(opened >= binary.separation && opened > binExtent * 0.2, 'a tight binary is opened on the map ' + opened);
+check(gDisk + kDisk < opened, 'binary disks stay apart ' + gDisk + ' ' + kDisk + ' ' + opened);
+const drawn = drawnStars(binary, 0.2, binExtent);
+check(Math.abs(Math.hypot(drawn[0].x - drawn[1].x, drawn[0].z - drawn[1].z) - opened) < 1e-6, 'drawn stars sit on the opened gap');
+const triExtent = systemExtent(triple);
+const triDrawn = drawnStars(triple, 0.15, triExtent);
+const triGap = drawnGap(triple, triExtent);
+for (let i = 0; i < 3; i++) {
+  for (let j = i + 1; j < 3; j++) {
+    const d = Math.hypot(triDrawn[i].x - triDrawn[j].x, triDrawn[i].z - triDrawn[j].z);
+    const ri = plateRadius(triple.stars[i], triExtent, triGap);
+    const rj = plateRadius(triple.stars[j], triExtent, triGap);
+    check(d > ri + rj, 'triple disks do not meet ' + i + ' ' + j + ' ' + d + ' ' + ri + ' ' + rj);
+  }
+}
 
 if (fails) process.exit(1);
 console.log('systems ok');

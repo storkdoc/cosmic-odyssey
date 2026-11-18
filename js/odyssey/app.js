@@ -3,7 +3,6 @@ import { createView } from './view.js';
 import { STAR_TYPES, defaultsFor, derive, formatYears, starType, iscoRadii } from './stars.js';
 import { designSystem } from './systems.js';
 import { createAudio } from '../audio.js';
-import { createGFilm } from './gfilm.js';
 
 const KEY = 'cosmic-odyssey.star';
 const countStep = document.getElementById('count');
@@ -15,7 +14,6 @@ const credits = document.getElementById('credits');
 const pathsBtn = document.getElementById('paths');
 
 const view = createView(document.getElementById('view'));
-const film = createGFilm(document.getElementById('g-film'));
 const audio = createAudio();
 audio.setVolume(1);
 
@@ -35,10 +33,7 @@ function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   view.frame(dt);
-  const pose = view.pose();
-  film.layout(pose.plates);
-  film.tick();
-  view.setPlatesCover(film.showing);
+  view.pose();
   audio.tick();
   const dist = document.getElementById('cam-dist');
   if (dist) dist.textContent = view.distance().toFixed(1);
@@ -59,7 +54,7 @@ function unlock() {
   if (!audio.current || audio.current.id !== 'zarathustra') audio.score('open');
 }
 
-document.addEventListener('pointerdown', () => { unlock(); film.prime(); }, { once: true });
+document.addEventListener('pointerdown', () => { unlock(); view.primePlates(); }, { once: true });
 
 function show(el) { el.hidden = false; }
 function hide(el) { el.hidden = true; }

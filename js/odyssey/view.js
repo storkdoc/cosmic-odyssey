@@ -1,6 +1,7 @@
 /* A NASA sky, up to three living stars, and a camera that can see one surface or the whole system. */
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { positionsAt, pathCenters, placeholderPlanets, planetParent, plateScale, plateRadius, systemExtent } from './systems.js';
+import { pathCenters, placeholderPlanets, planetParent, plateScale, plateRadius, systemExtent, layoutScale, drawnGap, drawnStars } from './systems.js';
+import { createPlateBank } from './plates.js';
 import { EffectComposer } from '../../vendor/three/postprocessing/EffectComposer.js';
 import { RenderPass } from '../../vendor/three/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../../vendor/three/postprocessing/UnrealBloomPass.js';
@@ -623,8 +624,24 @@ export function createView(canvas) {
     planetRings.forEach((ring) => { ring.visible = pathsOn; });
   }
 
-  let platesCover = false;
-  function setPlatesCover(on) { platesCover = !!on; }
+  const plateBank = createPlateBank(scene);
+  plateBank.prime();
+  function turnsNow() {
+    return simTime / (reduce ? 48 : 18);
+  }
+  function placement() {
+    if (!showBody || !sys || !sys.stars || !sys.stars.length) return [];
+    if (mode !== 'system') {
+      return sys.stars.slice(0, 1).map((star) => ({ star, x: 0, z: 0, r: plateScale(star) }));
+    }
+    const extent = mapExtent;
+    const placed = sys.count > 1 ? drawnStars(sys, turnsNow(), extent) : [{ x: 0, z: 0 }];
+    const gap = sys.count > 1 ? drawnGap(sys, extent) : 0;
+    return sys.stars.map((star, i) => {
+      const at = placed[i] || { x: 0, z: 0 };
+      return { star, x: at.x, z: at.z, r: plateRadius(star, extent, gap) };
+    });
+  }
 
   function hzAnchor(placed) {
     if (!sys || !sys.stars || !sys.stars[0] || !sys.stars[0].hz) return { x: 0, z: 0 };
@@ -640,19 +657,24 @@ export function createView(canvas) {
       if (hzMesh) hzMesh.visible = false;
       return;
     }
-    const turns = time / 18;
-    const placed = sys.count > 1 ? positionsAt(sys, turns) : [{ x: 0, z: 0, drawAU: sys.stars[0] && sys.stars[0].drawAU }];
+    const placed = sys.count > 1 ? drawnStars(sys, turnsNow(), mapExtent) : [{ x: 0, z: 0 }];
+    const gap = sys.count > 1 ? drawnGap(sys, mapExtent) : 0;
+    const disk = sys.stars[0] ? plateRadius(sys.stars[0], mapExtent, gap) : 0.1;
     sys.planets.forEach((planet, i) => {
       const parent = planetParent(sys, placed, planet.parent);
+      let reach = planet.a;
+      if (gap > 0 && (planet.parent === 'bary' || planet.parent === 'inner-bary')) reach = Math.max(planet.a, gap * 0.72);
+      else if (gap > 0) reach = Math.min(Math.max(planet.a, disk * 1.65), gap * 0.4);
       const ang = time * 0.4 / Math.max(0.12, planet.period);
-      const x = parent.x + Math.cos(ang) * planet.a;
-      const z = parent.z + Math.sin(ang) * planet.a;
+      const x = parent.x + Math.cos(ang) * reach;
+      const z = parent.z + Math.sin(ang) * reach;
       if (planetMeshes[i]) {
         planetMeshes[i].visible = true;
         planetMeshes[i].position.set(x, 0.02, z);
       }
       if (planetRings[i]) {
         planetRings[i].position.set(parent.x, 0, parent.z);
+        planetRings[i].scale.setScalar(planet.a > 0 ? reach / planet.a : 1);
         planetRings[i].visible = pathsOn;
       }
     });
@@ -672,40 +694,35 @@ export function createView(canvas) {
     return { x: (projector.x * 0.5 + 0.5) * w, y: (-projector.y * 0.5 + 0.5) * h };
   }
 
-  function plateBox(star, wx, wz) {
-    /* The new plates fill about 87% of the frame with the star disk. The frame
-       is sized so that disk, not the transparent margin, matches the diameter. */
-    const DISK = 0.87;
-    const gap = mode === 'system' && sys && sys.separation ? sys.separation : 0;
-    const scale = mode === 'system' ? plateRadius(star, mapExtent, gap) : plateScale(star);
-    const center = project(wx, 0, wz);
-    const edge = project(wx + scale, 0, wz);
-    const diskPx = Math.max(7, Math.hypot(edge.x - center.x, edge.y - center.y));
-    const radius = diskPx / DISK;
-    const size = radius * 2;
+  function plateBox(item) {
+    const center = project(item.x, item.z);
+    const edge = project(item.x + item.r, item.z);
+    const corner = project(item.x + item.r, item.z - item.r);
+    const radius = Math.max(1, Math.hypot(edge.x - center.x, edge.y - center.y));
     return {
       x: center.x - radius,
       y: center.y - radius,
-      w: size,
-      h: size,
-      type: star.type || 'g',
-      color: star.color || '#ffb15a'
+      w: radius * 2,
+      h: radius * 2,
+      cx: center.x,
+      cy: center.y,
+      cornerX: corner.x,
+      cornerY: corner.y,
+      worldX: item.x,
+      worldZ: item.z,
+      r: item.r,
+      type: item.star.type || 'g',
+      color: item.star.color || '#ffb15a'
     };
   }
 
   const viewDir = new THREE.Vector3();
   function pose() {
-    const plates = [];
-    if (showBody) {
-      const layout = sys;
-      const turns = simTime / 18;
-      const placed = layout && layout.count > 1 ? positionsAt(layout, turns) : [{ x: 0, z: 0 }];
-      const stars = layout && layout.stars && layout.stars.length ? layout.stars : (bodies[0].spec ? [bodies[0].spec] : []);
-      stars.forEach((star, i) => {
-        const at = placed[i] || placed[0];
-        plates.push(plateBox(star, at.x, at.z));
-      });
-    }
+    const placedNow = placement();
+    const plates = placedNow.map((item) => plateBox(item));
+    const world = placedNow.map((item) => ({
+      x: item.x, z: item.z, r: item.r, type: item.star.type || 'g'
+    }));
     camera.getWorldDirection(viewDir);
     const lean = Math.atan2(Math.hypot(viewDir.x, viewDir.z), Math.max(0, -viewDir.y));
     const reading = {
@@ -724,7 +741,8 @@ export function createView(canvas) {
       count: sys ? sys.count : 0,
       film: plates.length > 0,
       plate: plates[0] || null,
-      plates
+      plates,
+      world
     };
     window.__pose = reading;
     window.__plate = plates[0] || null;
@@ -880,28 +898,31 @@ export function createView(canvas) {
     camera.up.set(0, 0, -1);
     camera.position.set(pan.x, cam.dist, pan.z);
     camera.lookAt(pan.x, 0, pan.z);
-    const filmOn = platesCover;
+    const hiddenPlates = !!window.__hidePlates;
+    const drawn = placement();
+    plateBank.sync(drawn, hiddenPlates);
     if (mode === 'system' && sys && sys.count > 0) {
-      const turns = time / (reduce ? 48 : 18);
-      const placed = positionsAt(sys, turns);
-      placed.forEach((p, i) => {
+      const scale = layoutScale(sys, mapExtent);
+      drawn.forEach((p, i) => {
         const body = bodies[i];
         if (!body || !body.spec) return;
         body.group.position.set(p.x, 0, p.z);
-        const gap = sys && sys.separation ? sys.separation : 0;
-        body.group.scale.setScalar(Math.max(1e-4, plateRadius(body.spec, mapExtent, gap)));
-        body.group.visible = showBody && !filmOn;
+        body.group.scale.setScalar(Math.max(1e-4, p.r));
+        body.group.visible = showBody && !plateBank.slots[i].ready && !hiddenPlates;
       });
-      const centers = pathCenters(sys, turns);
+      const centers = pathCenters(sys, turnsNow());
       centers.forEach((c, i) => {
-        if (pathLines[i]) pathLines[i].position.set(c.x, 0, c.z);
+        if (!pathLines[i]) return;
+        pathLines[i].position.set(c.x, 0, c.z);
+        const open = sys.count > 1 && (!sys.outerAU || i < 2) ? scale : 1;
+        pathLines[i].scale.set(open, 1, open);
       });
     }
     movePlanets(time);
     pose();
     bodies.forEach((body, index) => {
       if (!body.spec) return;
-      if (mode === 'focus' && index === 0) body.group.visible = showBody && !filmOn;
+      if (mode === 'focus' && index === 0) body.group.visible = showBody && !plateBank.slots[0].ready && !hiddenPlates;
       if (!body.group.visible && !(mode === 'focus' && index === 0)) return;
       const spec = body.spec;
       const type = starType(spec.type);
@@ -1081,7 +1102,7 @@ export function createView(canvas) {
     setStar,
     setSystem,
     setPaths,
-    setPlatesCover,
+    primePlates: () => plateBank.prime(),
     bindPreviews,
     zoomBy,
     resize: applySize,
