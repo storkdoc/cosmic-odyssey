@@ -152,9 +152,11 @@ export function createPlateBank(scene) {
     const srcs = [];
     slots.forEach((slot) => {
       if (slot.video.readyState >= 2 && slot.video.videoWidth > 0) {
-        if (slot.video.paused) {
+        if (slot.video.paused && !slot.kick) {
+          slot.kick = true;
           const again = slot.video.play();
-          if (again && again.catch) again.catch(() => {});
+          if (again && again.finally) again.finally(() => { slot.kick = false; });
+          else slot.kick = false;
         }
         slot.ready = true;
         slot.texture.needsUpdate = true;

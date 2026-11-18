@@ -207,7 +207,7 @@ export function createGravity(layout, options = {}) {
   const seconds = options.secondsPerOrbit || 75;
   const period = layout.periodYears > 0 ? layout.periodYears : 1;
   const rate = formatTimeRate(period / seconds);
-  const dt = period / 480;
+  const dt = period / 2000;
   const stars = layout.stars || [];
   let bodies = stars.length > 1
     ? keplerStars(layout, 0).map((b) => Object.assign({ kind: 'star' }, b))
@@ -222,19 +222,41 @@ export function createGravity(layout, options = {}) {
   });
   pinBarycenter(bodies);
   let initial = cloneBodies(bodies);
-  let years = 0;
+  let previous = cloneBodies(bodies);
+  let physicsTime = 0;
+  const binaryAnalytic = () => stars.length === 2 && bodies.every((b) => b.kind === 'star');
 
-  function advanceTo(targetYears) {
-    if (targetYears + 1e-12 < years) {
-      bodies = cloneBodies(initial);
-      years = 0;
-    }
+  function centered(list) {
+    const cm = barycenter(list);
+    return list.map((b) => Object.assign({}, b, { x: b.x - cm.x, z: b.z - cm.z }));
+  }
+
+  function interpolated(alpha) {
+    const t = Math.min(1, Math.max(0, alpha));
+    return previous.map((b, i) => {
+      const c = bodies[i] || b;
+      return Object.assign({}, c, {
+        x: b.x + (c.x - b.x) * t,
+        z: b.z + (c.z - b.z) * t,
+        vx: b.vx + (c.vx - b.vx) * t,
+        vz: b.vz + (c.vz - b.vz) * t
+      });
+    });
+  }
+
+  /* Exact time for a binary with no planets. Fixed steps plus interpolation otherwise. */
+  function sample(targetYears) {
+    const years = Math.max(0, targetYears || 0);
+    if (binaryAnalytic()) return centered(keplerStars(layout, years));
     let guard = 0;
-    while (years + dt * 0.5 < targetYears && guard < 500000) {
+    while (physicsTime < years - 1e-15 && guard < 64) {
+      previous = cloneBodies(bodies);
       leapfrog(bodies, dt);
-      years += dt;
+      physicsTime += dt;
       guard += 1;
     }
+    const alpha = dt > 0 ? (years - (physicsTime - dt)) / dt : 1;
+    return centered(interpolated(alpha));
   }
 
   return {
@@ -243,14 +265,15 @@ export function createGravity(layout, options = {}) {
     period,
     yearsPerSecond: rate.yearsPerSecond,
     rateText: rate.text,
-    advanceTo,
+    sample,
     addPlanet(planet) {
       const verdict = assessPlanet(layout, planet);
       if (!verdict.ok) return verdict;
       placePlanet(bodies, layout, planet);
       pinBarycenter(bodies);
       initial = cloneBodies(bodies);
-      years = 0;
+      previous = cloneBodies(bodies);
+      physicsTime = 0;
       return verdict;
     }
   };
