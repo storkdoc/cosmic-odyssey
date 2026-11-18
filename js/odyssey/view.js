@@ -1,6 +1,6 @@
 /* A NASA sky, up to three living stars, and a camera that can see one surface or the whole system. */
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { pathCenters, placeholderPlanets, planetParent, plateScale, plateRadius, systemExtent, layoutScale, drawnGap, drawnStars } from './systems.js';
+import { pathCenters, planetParent, plateScale, plateRadius, systemExtent, layoutScale, drawnGap, drawnStars, ORBIT_SECONDS } from './systems.js';
 import { createPlateBank } from './plates.js';
 import { EffectComposer } from '../../vendor/three/postprocessing/EffectComposer.js';
 import { RenderPass } from '../../vendor/three/postprocessing/RenderPass.js';
@@ -532,11 +532,11 @@ export function createView(canvas) {
       if (star) paintBody(body, star);
       else body.spec = null;
     });
-    if (!layout.planets) layout.planets = placeholderPlanets(layout);
+    layout.planets = [];
     mapExtent = systemExtent(layout);
     (layout.paths || []).forEach((p) => makeCircle(p.radius));
-    buildPlanetRings(layout);
     buildHabitable(layout);
+    window.__planets = 0;
     camera.near = 0.01;
     camera.far = 8000;
     camera.updateProjectionMatrix();
@@ -599,6 +599,20 @@ export function createView(canvas) {
       planetRings.push(ring);
     });
   }
+  const HZ_VERT = `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`;
+  const HZ_FRAG = `
+    varying vec2 vUv;
+    void main() {
+      float feather = smoothstep(0.0, 0.42, vUv.y) * (1.0 - smoothstep(0.58, 1.0, vUv.y));
+      vec3 glow = vec3(0.32, 0.74, 0.62);
+      float a = 0.08 * feather;
+      gl_FragColor = vec4(glow * a, a);
+    }`;
   function buildHabitable(layout) {
     clearHz();
     const star = layout.stars && layout.stars[0];
@@ -608,12 +622,26 @@ export function createView(canvas) {
     const outer = Math.max(inner * 1.04, hz.outer);
     hzMesh = new THREE.Mesh(
       new THREE.RingGeometry(inner, outer, coarse ? 80 : 128),
-      new THREE.MeshBasicMaterial({
-        color: 0xb7d7a8, side: THREE.DoubleSide, transparent: true, opacity: 0.16, depthWrite: false
+      new THREE.ShaderMaterial({
+        vertexShader: HZ_VERT,
+        fragmentShader: HZ_FRAG,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+        blending: THREE.CustomBlending,
+        blendEquation: THREE.AddEquation,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneFactor,
+        blendSrcAlpha: THREE.ZeroFactor,
+        blendDstAlpha: THREE.OneFactor
       })
     );
     hzMesh.rotation.x = -Math.PI / 2;
     hzMesh.renderOrder = 1;
+    hzMesh.userData.inner = inner;
+    hzMesh.userData.outer = outer;
+    hzMesh.visible = pathsOn;
     scene.add(hzMesh);
   }
 
@@ -621,13 +649,25 @@ export function createView(canvas) {
     pathsOn = !!on;
     window.__paths = pathsOn;
     pathLines.forEach((line) => { line.visible = pathsOn; });
-    planetRings.forEach((ring) => { ring.visible = pathsOn; });
+    planetRings.forEach((ring) => { ring.visible = false; });
+    if (hzMesh) hzMesh.visible = pathsOn && mode === 'system';
+    const label = document.getElementById('hz-label');
+    if (label && !pathsOn) label.hidden = true;
+    if (window.__pose) window.__pose.hz = !!(hzMesh && hzMesh.visible);
   }
 
   const plateBank = createPlateBank(scene);
   plateBank.prime();
+  const orbitSeconds = reduce ? 180 : ORBIT_SECONDS;
+  window.__orbitSeconds = orbitSeconds;
   function turnsNow() {
-    return simTime / (reduce ? 48 : 18);
+    return simTime / orbitSeconds;
+  }
+  function screenFloor() {
+    const half = Math.tan((camera.fov * Math.PI) / 360);
+    const h = canvas.clientHeight || window.innerHeight;
+    const dist = Math.max(cam.dist, cam.target, 0.2);
+    return 56 * (dist * half * 2) / Math.max(1, h);
   }
   function placement() {
     if (!showBody || !sys || !sys.stars || !sys.stars.length) return [];
@@ -637,9 +677,12 @@ export function createView(canvas) {
     const extent = mapExtent;
     const placed = sys.count > 1 ? drawnStars(sys, turnsNow(), extent) : [{ x: 0, z: 0 }];
     const gap = sys.count > 1 ? drawnGap(sys, extent) : 0;
+    const floor = screenFloor();
     return sys.stars.map((star, i) => {
       const at = placed[i] || { x: 0, z: 0 };
-      return { star, x: at.x, z: at.z, r: plateRadius(star, extent, gap) };
+      const cap = gap > 0 ? gap * 0.3 : extent * 0.28;
+      const r = Math.min(cap, Math.max(plateRadius(star, extent, gap), Math.min(floor, cap)));
+      return { star, x: at.x, z: at.z, r };
     });
   }
 
@@ -650,39 +693,49 @@ export function createView(canvas) {
     return planetParent(sys, placed, aroundStar ? 'star0' : 'bary');
   }
 
-  function movePlanets(time) {
-    if (mode !== 'system' || !sys || !sys.planets || !sys.planets.length) {
-      planetMeshes.forEach((mesh) => { mesh.visible = false; });
-      planetRings.forEach((ring) => { ring.visible = false; });
+  function movePlanets() {
+    planetMeshes.forEach((mesh) => { mesh.visible = false; });
+    planetRings.forEach((ring) => { ring.visible = false; });
+    window.__planets = 0;
+    const label = document.getElementById('hz-label');
+    if (mode !== 'system' || !sys || !hzMesh) {
       if (hzMesh) hzMesh.visible = false;
+      if (label) label.hidden = true;
       return;
     }
     const placed = sys.count > 1 ? drawnStars(sys, turnsNow(), mapExtent) : [{ x: 0, z: 0 }];
-    const gap = sys.count > 1 ? drawnGap(sys, mapExtent) : 0;
-    const disk = sys.stars[0] ? plateRadius(sys.stars[0], mapExtent, gap) : 0.1;
-    sys.planets.forEach((planet, i) => {
-      const parent = planetParent(sys, placed, planet.parent);
-      let reach = planet.a;
-      if (gap > 0 && (planet.parent === 'bary' || planet.parent === 'inner-bary')) reach = Math.max(planet.a, gap * 0.72);
-      else if (gap > 0) reach = Math.min(Math.max(planet.a, disk * 1.65), gap * 0.4);
-      const ang = time * 0.4 / Math.max(0.12, planet.period);
-      const x = parent.x + Math.cos(ang) * reach;
-      const z = parent.z + Math.sin(ang) * reach;
-      if (planetMeshes[i]) {
-        planetMeshes[i].visible = true;
-        planetMeshes[i].position.set(x, 0.02, z);
-      }
-      if (planetRings[i]) {
-        planetRings[i].position.set(parent.x, 0, parent.z);
-        planetRings[i].scale.setScalar(planet.a > 0 ? reach / planet.a : 1);
-        planetRings[i].visible = pathsOn;
-      }
-    });
-    if (hzMesh) {
-      const anchor = hzAnchor(placed);
-      hzMesh.position.set(anchor.x, 0, anchor.z);
-      hzMesh.visible = true;
+    const anchor = hzAnchor(placed);
+    hzMesh.position.set(anchor.x, 0, anchor.z);
+    hzMesh.visible = pathsOn;
+    if (label && !pathsOn) label.hidden = true;
+  }
+
+  function placeZoneLabel() {
+    const label = document.getElementById('hz-label');
+    if (!label) return;
+    if (!hzMesh || !hzMesh.visible || mode !== 'system') {
+      label.hidden = true;
+      return;
     }
+    const edge = project(hzMesh.position.x + hzMesh.userData.outer * 0.78, hzMesh.position.z);
+    label.hidden = false;
+    label.style.left = edge.x + 'px';
+    label.style.top = edge.y + 'px';
+  }
+
+  function markZone(clientX, clientY) {
+    const label = document.getElementById('hz-label');
+    if (!label || label.hidden || !hzMesh || !hzMesh.visible) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const center = project(hzMesh.position.x, hzMesh.position.z);
+    const outer = project(hzMesh.position.x + hzMesh.userData.outer, hzMesh.position.z);
+    const inner = project(hzMesh.position.x + hzMesh.userData.inner, hzMesh.position.z);
+    const d = Math.hypot(x - center.x, y - center.y);
+    const outerPx = Math.hypot(outer.x - center.x, outer.y - center.y);
+    const innerPx = Math.hypot(inner.x - center.x, inner.y - center.y);
+    label.classList.toggle('on', d > innerPx * 0.88 && d < outerPx * 1.14);
   }
 
   const projector = new THREE.Vector3();
@@ -736,7 +789,7 @@ export function createView(canvas) {
       mode,
       extent: mapExtent,
       fit: fitDist,
-      orbits: planetRings.length,
+      orbits: pathLines.length,
       hz: !!(hzMesh && hzMesh.visible && mode === 'system'),
       count: sys ? sys.count : 0,
       film: plates.length > 0,
@@ -746,6 +799,7 @@ export function createView(canvas) {
     };
     window.__pose = reading;
     window.__plate = plates[0] || null;
+    placeZoneLabel();
     return reading;
   }
 
@@ -817,6 +871,7 @@ export function createView(canvas) {
     cam.lastX = event.clientX;
     cam.lastY = event.clientY;
     panBy(dx, dy);
+    markZone(event.clientX, event.clientY);
   }, { passive: false });
   const endPointer = (event) => {
     pointers.delete(event.pointerId);
@@ -854,6 +909,8 @@ export function createView(canvas) {
       cam.lastX = only.x;
       cam.lastY = only.y;
     }
+    const primary = event.touches[0];
+    if (primary) markZone(primary.clientX, primary.clientY);
   }, { passive: false });
   const endTouch = (event) => {
     stop(event);

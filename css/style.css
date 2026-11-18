@@ -46,6 +46,20 @@ canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+#hz-label {
+  position: fixed;
+  z-index: 5;
+  margin: 0;
+  pointer-events: none;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(176, 220, 204, 0.5);
+  text-shadow: 0 0 10px rgba(70, 130, 110, 0.55);
+  transform: translate(-50%, -160%);
+  white-space: nowrap;
+}
+#hz-label.on { color: rgba(214, 244, 232, 0.92); }
 #plate-bank {
   position: fixed;
   left: 0;

@@ -1,5 +1,5 @@
 import { derive, defaultsFor } from '../js/odyssey/stars.js';
-import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale, plateRadius, systemExtent, drawnStars, drawnGap } from '../js/odyssey/systems.js';
+import { designSystem, positionsAt, assessTriple, holmanWiegert, RSUN_AU, placeholderPlanets, plateScale, plateRadius, systemExtent, drawnStars, drawnGap, ORBIT_SECONDS } from '../js/odyssey/systems.js';
 
 let fails = 0;
 const check = (ok, msg) => { if (!ok) fails++; console.log(ok ? '  PASS' : '  FAIL', msg); };
@@ -68,9 +68,9 @@ check(ext > worlds[worlds.length - 1].a, 'the frame reaches past the outer world
 const sunPlate = plateRadius(star('g'), ext);
 const nsPlate = plateRadius(star('ns'), ext);
 const giantOnMap = plateRadius(star('giant'), ext);
-check(sunPlate < ext * 0.2 && sunPlate > ext * 0.04, 'a sun is a fraction of the map ' + sunPlate);
+check(sunPlate <= ext * 0.28 && sunPlate > ext * 0.12, 'a sun is large enough to read ' + sunPlate);
 check(nsPlate >= ext * 0.02 && nsPlate < sunPlate * 0.5, 'a neutron star stays visible and smaller than the sun ' + nsPlate);
-check(giantOnMap > sunPlate && giantOnMap <= ext * 0.18 + 1e-9, 'a giant is larger and still inside the map ' + giantOnMap);
+check(giantOnMap > sunPlate && giantOnMap <= ext * 0.28 + 1e-9, 'a giant is larger and still inside the map ' + giantOnMap);
 check(systemExtent(none) > 0, 'a rogue map still has a frame');
 
 const binExtent = systemExtent(Object.assign({}, binary, { planets: binaryPlanets }));
@@ -78,7 +78,8 @@ const opened = drawnGap(binary, binExtent);
 const gDisk = plateRadius(binary.stars[0], binExtent, opened);
 const kDisk = plateRadius(binary.stars[1], binExtent, opened);
 check(opened >= binary.separation && opened > binExtent * 0.2, 'a tight binary is opened on the map ' + opened);
-check(gDisk + kDisk < opened, 'binary disks stay apart ' + gDisk + ' ' + kDisk + ' ' + opened);
+check(gDisk + kDisk < opened * 0.999, 'binary disks stay apart ' + gDisk + ' ' + kDisk + ' ' + opened);
+check(ORBIT_SECONDS >= 60 && ORBIT_SECONDS <= 90, 'a binary orbit takes about a minute and a quarter ' + ORBIT_SECONDS);
 const drawn = drawnStars(binary, 0.2, binExtent);
 check(Math.abs(Math.hypot(drawn[0].x - drawn[1].x, drawn[0].z - drawn[1].z) - opened) < 1e-6, 'drawn stars sit on the opened gap');
 const triExtent = systemExtent(triple);
