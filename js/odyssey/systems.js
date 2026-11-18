@@ -210,29 +210,30 @@ export function plateScale(star) {
   return Math.max(0.07, Math.min(4.2, Math.sqrt(Math.max(suns, 1e-8))));
 }
 
-/* Disk radius on the overhead map. A sun is a small fraction of the framed
-   system. A gap (the inner stellar separation) keeps a binary from merging
-   into one disk. Remnants keep a floor so they stay findable, and a giant is
-   capped so it cannot cover the orbits. Without an extent, this is the close-up scale. */
+/* One full turn of a binary, or of a triple's inner pair, on the screen. */
+export const ORBIT_SECONDS = 75;
+
+/* Disk radius on the overhead map. A lone star is large enough to show its
+   surface. A gap keeps companions from meeting: each disk is at most 30% of
+   the gap, so the pair always has open sky between them. */
 export function plateRadius(star, extent, gap) {
   const rel = plateScale(star);
   if (!(extent > 0)) return rel;
   if (!(gap > 0)) {
-    const size = rel * extent * 0.085;
-    return Math.max(extent * 0.02, Math.min(extent * 0.16, size));
+    const size = rel * extent * 0.2;
+    return Math.max(extent * 0.045, Math.min(extent * 0.28, size));
   }
-  /* Two companions each take at most 18% of the gap, so the disks cannot meet. */
-  const cap = gap * 0.18;
+  const cap = gap * 0.3;
   const size = Math.min(rel, 1) * cap;
-  const floor = Math.min(gap * 0.05, cap);
+  const floor = Math.min(gap * 0.08, cap);
   return Math.max(floor, Math.min(cap, size));
 }
 
-/* How much to open a tight pair so the gap reads on the map without crossing the outer star. */
+/* How much to open a tight pair so each star is large on the map without crossing the outer star. */
 export function layoutScale(layout, extent) {
   const gap = layout && layout.count > 1 && layout.separation > 0 ? layout.separation : 0;
   if (!gap || !(extent > 0)) return 1;
-  const wanted = extent * 0.36;
+  const wanted = extent * 0.62;
   let cap = 8;
   if (layout.outerAU) cap = Math.min(cap, (0.42 * layout.outerAU) / gap);
   return Math.max(1, Math.min(wanted / gap, cap));

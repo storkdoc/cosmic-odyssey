@@ -245,8 +245,12 @@ async function voyage(page, name) {
   await page.waitForFunction(() => window.__pose && window.__pose.mode === 'system' && window.__pose.tilt === 0);
   const framed = await page.evaluate(() => window.__pose);
   if (framed.count > 0) {
-    if (!(framed.orbits >= 1)) throw new Error('orbit rings missing');
+    if (framed.count > 1 && !(framed.orbits >= 1)) throw new Error('orbit rings missing');
     if (!(framed.hz)) throw new Error('habitable zone missing');
+    if (framed.plates && framed.plates[0] && framed.plates[0].w < 48) throw new Error('star plate is a speck ' + framed.plates[0].w);
+    const pace = await page.evaluate(() => window.__orbitSeconds);
+    if (!(pace >= 60 && pace <= 90)) throw new Error('orbits are not calm ' + pace);
+    if (await page.evaluate(() => window.__planets) !== 0) throw new Error('placeholder planets are still drawn');
     if (!(framed.dist > framed.extent * 0.8 && Math.abs(framed.dist - framed.fit) / framed.fit < 0.25)) {
       throw new Error('the map is not framed ' + framed.dist + ' fit ' + framed.fit + ' extent ' + framed.extent);
     }
@@ -259,6 +263,7 @@ async function voyage(page, name) {
   }
   const next = await page.locator('#next-copy').innerText();
   if (!/Next: planets/.test(next)) throw new Error('next chapter ' + next);
+  if (/Placeholder/.test(next)) throw new Error('placeholder copy remains');
   if (many === '2' && !/Holman/.test(next)) throw new Error('binary note ' + next);
   if (many === '2') {
     await page.waitForFunction(() => {
@@ -277,6 +282,7 @@ async function voyage(page, name) {
     if (await page.evaluate(() => window.__paths) !== true) throw new Error('orbits did not start on');
     await click('#paths');
     if (await page.evaluate(() => window.__paths) !== false) throw new Error('orbit toggle did not hide paths');
+    if (await page.evaluate(() => window.__pose.hz) !== false) throw new Error('orbit toggle left the habitable zone up');
     await page.waitForFunction(() => {
       const el = document.getElementById('cam-dist');
       const n = parseFloat(el.textContent);

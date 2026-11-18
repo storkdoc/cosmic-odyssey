@@ -223,7 +223,7 @@ function finish() {
   const sys = designSystem(built);
   view.setSystem(sys);
   document.body.classList.add('map-open');
-  document.getElementById('next-copy').textContent = sys.note + ' Placeholder worlds already move on the rings. Next: planets (coming soon).';
+  document.getElementById('next-copy').textContent = sys.note + ' Next: planets (coming soon).';
   pathsBtn.hidden = sys.count < 1;
   pathsBtn.setAttribute('aria-pressed', 'true');
   pathsBtn.textContent = 'Orbits on';
